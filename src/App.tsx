@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { Calendar, momentLocalizer, Views } from 'react-big-calendar';
 import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop';
-import moment from 'moment';
+import moment from 'moment/min/moment-with-locales';
 import { v4 as uuidv4 } from 'uuid';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
@@ -10,6 +10,8 @@ declare var chrome: any;
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 
+const userLocale = Intl.DateTimeFormat().resolvedOptions().locale;
+moment.locale(userLocale);
 const localizer = momentLocalizer(moment);
 const DnDCalendar = withDragAndDrop(Calendar);
 
@@ -95,7 +97,7 @@ const formatMs = (ms: number) => {
   const hours = Math.floor(ms / (1000 * 60 * 60));
   const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
   const pad = (num: number) => num.toString().padStart(2, '0');
-  
+
   if (hours > 0) {
     return `${hours}:${pad(minutes)}`;
   }
@@ -128,6 +130,8 @@ const CustomToolbar = (toolbar: any) => {
     );
   };
 
+  console.log(userLocale, moment.localeData().firstDayOfWeek());
+
   return (
     <div className="toolbar-container">
       <div className="toolbar-buttons">
@@ -143,20 +147,20 @@ const CustomToolbar = (toolbar: any) => {
       </div>
       <div>{label()}</div>
       <div className="toolbar-buttons">
-        <button 
-          className={`btn ${toolbar.view === 'month' ? 'primary' : ''}`} 
+        <button
+          className={`btn ${toolbar.view === 'month' ? 'primary' : ''}`}
           onClick={() => toolbar.onView('month')}
         >
           Month
         </button>
-        <button 
-          className={`btn ${toolbar.view === 'week' ? 'primary' : ''}`} 
+        <button
+          className={`btn ${toolbar.view === 'week' ? 'primary' : ''}`}
           onClick={() => toolbar.onView('week')}
         >
           Week
         </button>
-        <button 
-          className={`btn ${toolbar.view === 'day' ? 'primary' : ''}`} 
+        <button
+          className={`btn ${toolbar.view === 'day' ? 'primary' : ''}`}
           onClick={() => toolbar.onView('day')}
         >
           Day
@@ -288,7 +292,7 @@ function App() {
     const CustomHeader = ({ date, label }: any) => {
       const dayEvents = events.filter((e) => moment(e.start).isSame(date, 'day'));
       const totalMs = dayEvents.reduce((acc, e) => acc + (e.end.getTime() - e.start.getTime()), 0);
-      
+
       const durationStr = totalMs > 0 ? formatMs(totalMs) : '';
 
       return (
@@ -315,8 +319,8 @@ function App() {
           </div>
           <div className="month-events-wrapper">
             {dayEvents.map(e => (
-              <div 
-                key={e.id} 
+              <div
+                key={e.id}
                 data-title={e.title}
                 className="month-event-tag"
                 style={{ backgroundColor: e.color || 'var(--event-color-4)' }}
@@ -352,7 +356,7 @@ function App() {
       const hour = date.getHours();
       const minutes = date.getMinutes();
       const time = hour * 60 + minutes;
-      
+
       // 10:00 (600 mins) to 18:30 (1110 mins)
       if (time >= 600 && time < 1110) {
         return {
