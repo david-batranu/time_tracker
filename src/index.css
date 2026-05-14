@@ -187,9 +187,7 @@ body {
 }
 
 .rbc-date-cell {
-  padding: 8px !important;
-  font-weight: 600;
-  color: var(--text-secondary);
+  padding: 0 !important;
 }
 
 .rbc-off-range-bg {
@@ -205,4 +203,104 @@ body {
   font-weight: 600;
   color: var(--primary-color);
   font-size: 11px;
+}
+.rbc-month-view .rbc-event,
+.rbc-month-view .rbc-show-more {
+  display: none !important;
+}
+
+/* Month View Custom Components */
+.month-day-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 100%;
+}
+
+.month-day-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 0 4px;
+}
+
+.month-total-duration {
+  font-size: 0.85em;
+  color: var(--primary-color);
+  font-weight: 600;
+}
+
+.month-day-label {
+  margin-left: auto;
+  font-weight: 700;
+}
+
+.month-events-wrapper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 4px;
+  margin-top: 2px;
+}
+
+.month-event-tag {
+  font-size: 10px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  white-space: nowrap;
+  color: var(--text-primary);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+/* Custom Tooltip for Month View */
+.month-event-tag {
+  position: relative;
+  cursor: pointer;
+}
+
+.month-event-tag:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  z-index: 10;
+}
+
+.month-event-tag:hover::after {
+  content: attr(data-title);
+  position: absolute;
+  bottom: calc(100% + 5px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(30, 41, 59, 0.95); /* Dark background */
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  z-index: 20;
+}
+
+/* Tooltip Arrow */
+.month-event-tag:hover::before {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 5px;
+  border-style: solid;
+  border-color: rgba(30, 41, 59, 0.95) transparent transparent transparent;
+  z-index: 20;
+}
+
+/* Ensure tooltips are not clipped by calendar containers */
+.rbc-month-view, 
+.rbc-month-row, 
+.rbc-row-content, 
+.rbc-row,
+.rbc-date-cell {
+  overflow: visible !important;
 }

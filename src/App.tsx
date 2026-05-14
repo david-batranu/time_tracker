@@ -91,16 +91,19 @@ const storage = {
   }
 };
 
-const formatDuration = (start: Date, end: Date) => {
-  const durationMs = end.getTime() - start.getTime();
-  const hours = Math.floor(durationMs / (1000 * 60 * 60));
-  const minutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
-  const seconds = Math.floor((durationMs % (1000 * 60)) / 1000);
+const formatMs = (ms: number) => {
+  const hours = Math.floor(ms / (1000 * 60 * 60));
+  const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
   const pad = (num: number) => num.toString().padStart(2, '0');
+  
   if (hours > 0) {
-    return `${hours}:${pad(minutes)}:${pad(seconds)}`;
+    return `${hours}:${pad(minutes)}`;
   }
-  return `${minutes}:${pad(seconds)}`;
+  return `${minutes}m`;
+};
+
+const formatDuration = (start: Date, end: Date) => {
+  return formatMs(end.getTime() - start.getTime());
 };
 
 const CustomToolbar = (toolbar: any) => {
@@ -286,18 +289,7 @@ function App() {
       const dayEvents = events.filter((e) => moment(e.start).isSame(date, 'day'));
       const totalMs = dayEvents.reduce((acc, e) => acc + (e.end.getTime() - e.start.getTime()), 0);
       
-      let durationStr = '';
-      if (totalMs > 0) {
-        const hours = Math.floor(totalMs / (1000 * 60 * 60));
-        const minutes = Math.floor((totalMs % (1000 * 60 * 60)) / (1000 * 60));
-        const seconds = Math.floor((totalMs % (1000 * 60)) / 1000);
-        const pad = (num: number) => num.toString().padStart(2, '0');
-        if (hours > 0) {
-          durationStr = `${hours}:${pad(minutes)}:${pad(seconds)}`;
-        } else {
-          durationStr = `${minutes}:${pad(seconds)}`;
-        }
-      }
+      const durationStr = totalMs > 0 ? formatMs(totalMs) : '';
 
       return (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '4px 0' }}>
@@ -307,10 +299,43 @@ function App() {
       );
     };
 
+    const CustomDateHeader = ({ label, date }: any) => {
+      const dayEvents = events.filter((e) => moment(e.start).isSame(date, 'day'));
+      const totalMs = dayEvents.reduce((acc, e) => acc + (e.end.getTime() - e.start.getTime()), 0);
+
+      const durationStr = totalMs > 0 ? formatMs(totalMs) : '';
+
+      return (
+        <div className="month-day-container">
+          <div className="rbc-button-link month-day-header">
+            <span className="month-total-duration">
+              {durationStr}
+            </span>
+            <span className="month-day-label">{label}</span>
+          </div>
+          <div className="month-events-wrapper">
+            {dayEvents.map(e => (
+              <div 
+                key={e.id} 
+                data-title={e.title}
+                className="month-event-tag"
+                style={{ backgroundColor: e.color || 'var(--event-color-4)' }}
+              >
+                {formatDuration(e.start, e.end)}
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    };
+
     return {
       toolbar: CustomToolbar,
       event: CustomEvent,
-      header: CustomHeader
+      header: CustomHeader,
+      month: {
+        dateHeader: CustomDateHeader
+      }
     };
   }, [events]);
 
