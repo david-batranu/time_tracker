@@ -21,7 +21,13 @@ interface TimeEntry {
   color?: string;
 }
 
-const COLORS = ['#fce7f3', '#dcfce7', '#fef08a', '#e0e7ff', '#ffedd5'];
+const COLORS = [
+  'var(--event-color-1)',
+  'var(--event-color-2)',
+  'var(--event-color-3)',
+  'var(--event-color-4)',
+  'var(--event-color-5)'
+];
 
 // Storage helper
 const storage = {
@@ -208,7 +214,7 @@ function App() {
     (event: any) => ({
       style: {
         backgroundColor: event.color,
-        color: '#1e293b', // Dark text for pastel colors
+        color: 'var(--text-primary)', // Dark text for pastel colors
       },
     }),
     []
@@ -245,7 +251,7 @@ function App() {
       return (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '4px 0' }}>
           <div>{label}</div>
-          {durationStr && <div style={{ fontSize: '0.85em', color: '#64748b', fontWeight: 'normal', marginTop: '4px' }}>{durationStr}</div>}
+          {durationStr && <div style={{ fontSize: '0.85em', color: 'var(--text-secondary)', fontWeight: 'normal', marginTop: '4px' }}>{durationStr}</div>}
         </div>
       );
     };
@@ -256,6 +262,31 @@ function App() {
       header: CustomHeader
     };
   }, [events]);
+
+  const formats = useMemo(() => ({
+    timeGutterFormat: 'HH:mm',
+    eventTimeRangeFormat: ({ start, end }: any, culture: any, localizer: any) =>
+      localizer.format(start, 'HH:mm', culture) + ' – ' + localizer.format(end, 'HH:mm', culture),
+    selectRangeFormat: ({ start, end }: any, culture: any, localizer: any) =>
+      localizer.format(start, 'HH:mm', culture) + ' – ' + localizer.format(end, 'HH:mm', culture),
+  }), []);
+
+  const slotPropGetter = useCallback(
+    (date: Date) => {
+      const hour = date.getHours();
+      const minutes = date.getMinutes();
+      const time = hour * 60 + minutes;
+      
+      // 10:00 (600 mins) to 18:30 (1110 mins)
+      if (time >= 600 && time < 1110) {
+        return {
+          className: 'workday-slot',
+        };
+      }
+      return {};
+    },
+    []
+  );
 
   return (
     <div className="app-container">
@@ -274,8 +305,10 @@ function App() {
           scrollToTime={scrollToTime}
           step={15}
           timeslots={4}
+          formats={formats}
           components={components}
           eventPropGetter={eventPropGetter}
+          slotPropGetter={slotPropGetter}
         />
       </div>
     </div>
