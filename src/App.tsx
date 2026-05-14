@@ -140,10 +140,22 @@ const CustomToolbar = (toolbar: any) => {
       </div>
       <div>{label()}</div>
       <div className="toolbar-buttons">
-        <button className="btn primary" onClick={() => toolbar.onView('week')}>
+        <button 
+          className={`btn ${toolbar.view === 'month' ? 'primary' : ''}`} 
+          onClick={() => toolbar.onView('month')}
+        >
+          Month
+        </button>
+        <button 
+          className={`btn ${toolbar.view === 'week' ? 'primary' : ''}`} 
+          onClick={() => toolbar.onView('week')}
+        >
           Week
         </button>
-        <button className="btn" onClick={() => toolbar.onView('day')}>
+        <button 
+          className={`btn ${toolbar.view === 'day' ? 'primary' : ''}`} 
+          onClick={() => toolbar.onView('day')}
+        >
           Day
         </button>
       </div>
@@ -153,6 +165,8 @@ const CustomToolbar = (toolbar: any) => {
 
 function App() {
   const [events, setEvents] = useState<TimeEntry[]>([]);
+  const [view, setView] = useState<any>(Views.WEEK);
+  const [date, setDate] = useState(new Date());
 
   useEffect(() => {
     if (typeof chrome === 'undefined' || !chrome.storage) {
@@ -162,12 +176,14 @@ function App() {
   }, []);
 
   const handleEventsChange = useCallback((newEvents: TimeEntry[]) => {
+    if (view === Views.MONTH) return;
     setEvents(newEvents);
     storage.set(newEvents);
-  }, []);
+  }, [view]);
 
   const onEventResize = useCallback(
     ({ event, start, end }: any) => {
+      if (view === Views.MONTH) return;
       const nextEvents = events.map((existingEvent) => {
         return existingEvent.id === event.id
           ? { ...existingEvent, start, end }
@@ -176,11 +192,12 @@ function App() {
 
       handleEventsChange(nextEvents);
     },
-    [events]
+    [events, handleEventsChange, view]
   );
 
   const onEventDrop = useCallback(
     ({ event, start, end }: any) => {
+      if (view === Views.MONTH) return;
       const nextEvents = events.map((existingEvent) => {
         return existingEvent.id === event.id
           ? { ...existingEvent, start, end }
@@ -189,11 +206,16 @@ function App() {
 
       handleEventsChange(nextEvents);
     },
-    [events]
+    [events, handleEventsChange, view]
   );
 
   const handleSelectSlot = useCallback(
     ({ start, end }: { start: Date; end: Date }) => {
+      if (view === Views.MONTH) {
+        setDate(start);
+        setView(Views.WEEK);
+        return;
+      }
       const title = window.prompt('New Event Name');
       if (title) {
         const newEvent: TimeEntry = {
@@ -206,11 +228,16 @@ function App() {
         handleEventsChange([...events, newEvent]);
       }
     },
-    [events]
+    [events, handleEventsChange, view]
   );
 
   const handleSelectEvent = useCallback(
     (event: any) => {
+      if (view === Views.MONTH) {
+        setDate(event.start);
+        setView(Views.WEEK);
+        return;
+      }
       const title = window.prompt('Update Event Name', event.title);
       if (title === "") {
         // Delete
@@ -223,7 +250,7 @@ function App() {
         handleEventsChange(nextEvents);
       }
     },
-    [events]
+    [events, handleEventsChange, view]
   );
 
   const { defaultDate, scrollToTime } = useMemo(
@@ -316,16 +343,23 @@ function App() {
     <div className="app-container">
       <div className="calendar-container">
         <DnDCalendar
+          date={date}
+          onNavigate={(newDate) => setDate(newDate)}
+          view={view}
+          onView={(newView) => setView(newView)}
           defaultDate={defaultDate}
-          defaultView={Views.WEEK}
           events={events}
           localizer={localizer}
           onEventDrop={onEventDrop}
           onEventResize={onEventResize}
           onSelectEvent={handleSelectEvent}
           onSelectSlot={handleSelectSlot}
-          resizable
-          selectable
+          onDrillDown={(clickedDate, _view) => {
+            setDate(clickedDate);
+            setView(Views.WEEK);
+          }}
+          resizable={view !== Views.MONTH}
+          selectable={true}
           scrollToTime={scrollToTime}
           step={15}
           timeslots={4}
@@ -333,6 +367,7 @@ function App() {
           components={components}
           eventPropGetter={eventPropGetter}
           slotPropGetter={slotPropGetter}
+          views={[Views.MONTH, Views.WEEK, Views.DAY]}
         />
       </div>
     </div>

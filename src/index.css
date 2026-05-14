@@ -41,11 +41,7 @@ body {
 
 .calendar-container {
   flex: 1;
-  padding: 20px;
   background: var(--sidebar-bg);
-  border-radius: 12px;
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  margin: 16px;
   display: flex;
   flex-direction: column;
 }
@@ -80,7 +76,8 @@ body {
 }
 
 .rbc-day-slot .rbc-time-slot {
-  border-top: 1px dotted rgba(226, 232, 240, 0.5); /* Muted quarter-hour marks */
+  border-top: 1px dotted rgba(226, 232, 240, 0.5);
+  /* Muted quarter-hour marks */
 }
 
 .rbc-timeslot-group {
@@ -134,6 +131,7 @@ body {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
+  padding: 1rem 1rem 0 1rem;
 }
 
 .toolbar-buttons {
@@ -173,4 +171,38 @@ body {
 
 .workday-slot {
   background-color: var(--workday-bg) !important;
+}
+
+/* Month View Improvements */
+.rbc-month-view {
+  border: none !important;
+}
+
+.rbc-month-row {
+  border-top: 1px solid var(--border-color) !important;
+}
+
+.rbc-day-bg+.rbc-day-bg {
+  border-left: 1px solid var(--border-color) !important;
+}
+
+.rbc-date-cell {
+  padding: 8px !important;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.rbc-off-range-bg {
+  background: var(--bg-color) !important;
+  opacity: 0.5;
+}
+
+.rbc-month-event {
+  height: auto !important;
+}
+
+.rbc-show-more {
+  font-weight: 600;
+  color: var(--primary-color);
+  font-size: 11px;
 }
