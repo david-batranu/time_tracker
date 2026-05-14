@@ -704,6 +704,7 @@ function App() {
 
     const CustomDateHeader = ({ label, date }: any) => {
       if (!date) return <span>{label}</span>;
+      const isWeekend = date.getDay() === 0 || date.getDay() === 6;
       const dayEvents = events.filter((e) => e && e.start && moment(e.start).isSame(date, 'day'));
       const totalMs = dayEvents.reduce((acc, e) => {
         if (!e.start || !e.end) return acc;
@@ -713,7 +714,7 @@ function App() {
       const durationStr = totalMs > 0 ? formatMs(totalMs) : '';
 
       return (
-        <div className="month-day-container">
+        <div className={`month-day-container ${isWeekend ? 'is-weekend-date' : ''}`}>
           <div className="rbc-button-link month-day-header">
             <span className="month-total-duration">
               {durationStr}

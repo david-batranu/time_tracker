@@ -384,6 +384,10 @@ input:checked + .slider:before {
   max-width: 20% !important;
 }
 
+.hide-weekends .rbc-month-view .rbc-date-cell:has(.is-weekend-date) {
+  display: none !important;
+}
+
 .hide-weekends .rbc-month-view .rbc-row {
   display: flex !important;
 }
