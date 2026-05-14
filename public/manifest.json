@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Time Tracker Extension",
+  "version": "1.0",
+  "description": "Track your daily spent time with a calendar agenda view",
+  "action": {
+    "default_popup": "index.html",
+    "default_title": "Open Time Tracker"
+  },
+  "permissions": [
+    "storage"
+  ]
+}

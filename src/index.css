@@ -1,0 +1,164 @@
+:root {
+  --primary-color: #f77f00; /* A vibrant orange/amber for main actions */
+  --bg-color: #fcfcfc;
+  --text-primary: #1e293b;
+  --text-secondary: #64748b;
+  --border-color: #e2e8f0;
+  --sidebar-bg: #ffffff;
+  --event-color-1: #fce7f3; /* Pink */
+  --event-color-2: #dcfce7; /* Green */
+  --event-color-3: #fef08a; /* Yellow */
+  --event-color-4: #e0e7ff; /* Indigo/Purple */
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--bg-color);
+  color: var(--text-primary);
+  min-width: 800px;
+  min-height: 600px;
+}
+
+.app-container {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+.calendar-container {
+  flex: 1;
+  padding: 20px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  margin: 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* React Big Calendar Overrides for a Premium Look */
+.rbc-calendar {
+  flex: 1;
+}
+
+.rbc-header {
+  padding: 12px 0;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-secondary);
+  border-bottom: 2px solid var(--border-color);
+}
+
+.rbc-allday-cell {
+  display: none;
+}
+
+.rbc-time-view {
+  border: none;
+}
+
+.rbc-time-header.rbc-overflowing {
+  border-right: none;
+}
+
+.rbc-time-content {
+  border-top: none;
+}
+
+.rbc-day-slot .rbc-time-slot {
+  border-top: 1px dashed var(--border-color);
+}
+
+.rbc-timeslot-group {
+  border-bottom: 1px solid var(--border-color);
+  min-height: 48px; /* Bigger slots */
+}
+
+.rbc-event {
+  background-color: var(--event-color-4);
+  border: none;
+  color: var(--text-primary);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.rbc-event:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.rbc-event-content {
+  font-weight: 500;
+}
+
+.rbc-today {
+  background-color: #f8fafc;
+}
+
+.rbc-current-time-indicator {
+  background-color: #ef4444;
+  height: 2px;
+}
+
+.rbc-current-time-indicator::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: -4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #ef4444;
+}
+
+/* Custom Toolbar Styles */
+.toolbar-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.toolbar-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.btn {
+  padding: 8px 16px;
+  border: 1px solid var(--border-color);
+  background: white;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s;
+  color: var(--text-primary);
+}
+
+.btn:hover {
+  background: #f1f5f9;
+}
+
+.btn.primary {
+  background: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+}
+
+.btn.primary:hover {
+  background: #ea580c;
+}
+
+.toolbar-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
