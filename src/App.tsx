@@ -64,6 +64,18 @@ const storage = {
   }
 };
 
+const formatDuration = (start: Date, end: Date) => {
+  const durationMs = end.getTime() - start.getTime();
+  const hours = Math.floor(durationMs / (1000 * 60 * 60));
+  const minutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
+  const seconds = Math.floor((durationMs % (1000 * 60)) / 1000);
+  const pad = (num: number) => num.toString().padStart(2, '0');
+  if (hours > 0) {
+    return `${hours}:${pad(minutes)}:${pad(seconds)}`;
+  }
+  return `${minutes}:${pad(seconds)}`;
+};
+
 const CustomToolbar = (toolbar: any) => {
   const goToBack = () => {
     toolbar.onNavigate('PREV');
@@ -202,6 +214,49 @@ function App() {
     []
   );
 
+  const components = useMemo(() => {
+    const CustomEvent = ({ event }: any) => {
+      const duration = formatDuration(event.start, event.end);
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <div style={{ fontWeight: 600 }}>{event.title}</div>
+          <div style={{ fontSize: '0.85em', opacity: 0.8 }}>{duration}</div>
+        </div>
+      );
+    };
+
+    const CustomHeader = ({ date, label }: any) => {
+      const dayEvents = events.filter((e) => moment(e.start).isSame(date, 'day'));
+      const totalMs = dayEvents.reduce((acc, e) => acc + (e.end.getTime() - e.start.getTime()), 0);
+      
+      let durationStr = '';
+      if (totalMs > 0) {
+        const hours = Math.floor(totalMs / (1000 * 60 * 60));
+        const minutes = Math.floor((totalMs % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((totalMs % (1000 * 60)) / 1000);
+        const pad = (num: number) => num.toString().padStart(2, '0');
+        if (hours > 0) {
+          durationStr = `${hours}:${pad(minutes)}:${pad(seconds)}`;
+        } else {
+          durationStr = `${minutes}:${pad(seconds)}`;
+        }
+      }
+
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '4px 0' }}>
+          <div>{label}</div>
+          {durationStr && <div style={{ fontSize: '0.85em', color: '#64748b', fontWeight: 'normal', marginTop: '4px' }}>{durationStr}</div>}
+        </div>
+      );
+    };
+
+    return {
+      toolbar: CustomToolbar,
+      event: CustomEvent,
+      header: CustomHeader
+    };
+  }, [events]);
+
   return (
     <div className="app-container">
       <div className="calendar-container">
@@ -219,9 +274,7 @@ function App() {
           scrollToTime={scrollToTime}
           step={15}
           timeslots={4}
-          components={{
-            toolbar: CustomToolbar
-          }}
+          components={components}
           eventPropGetter={eventPropGetter}
         />
       </div>
