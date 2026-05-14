@@ -677,9 +677,24 @@ function App() {
       if (!event) return null;
       const duration = formatDuration(event.start, event.end);
       return (
-        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-          <div style={{ fontWeight: 600 }}>{event.title || 'Untitled'}</div>
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+          <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{event.title || 'Untitled'}</div>
           <div style={{ fontSize: '0.85em', opacity: 0.8 }}>{duration}</div>
+          {event.description && (
+            <div style={{ 
+              fontSize: '0.75em', 
+              opacity: 0.7, 
+              marginTop: '2px', 
+              overflow: 'hidden', 
+              textOverflow: 'ellipsis',
+              display: '-webkit-box',
+              WebkitLineClamp: 3,
+              WebkitBoxOrient: 'vertical',
+              whiteSpace: 'pre-wrap'
+            }}>
+              {event.description}
+            </div>
+          )}
         </div>
       );
     };
@@ -724,14 +739,21 @@ function App() {
           <div className="month-events-wrapper">
             {dayEvents.map(e => {
               if (!e) return null;
+              const proj = projects.find(p => p.id === e.projectId);
               return (
                 <div
                   key={e.id}
-                  data-title={e.title || 'Untitled'}
                   className="month-event-tag"
-                  style={{ backgroundColor: projects.find(p => p.id === e.projectId)?.color || e.color || 'var(--event-color-4)' }}
+                  style={{ backgroundColor: proj?.color || e.color || 'var(--event-color-4)' }}
                 >
                   {formatDuration(e.start, e.end)}
+                  <div className="event-tooltip">
+                    <div className="tooltip-header">
+                      {proj && <span className="project-pill" style={{ backgroundColor: proj.color }}>{proj.title}</span>}
+                      <span className="event-title">{e.title || 'Untitled'}</span>
+                    </div>
+                    {e.description && <div className="tooltip-description">{e.description}</div>}
+                  </div>
                 </div>
               );
             })}

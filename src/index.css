@@ -265,35 +265,71 @@ body {
   z-index: 10;
 }
 
-.month-event-tag:hover::after {
-  content: attr(data-title);
+.event-tooltip {
   position: absolute;
-  bottom: calc(100% + 5px);
+  bottom: calc(100% + 8px);
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(30, 41, 59, 0.95); /* Dark background */
-  color: white;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 500;
-  white-space: nowrap;
+  background: white;
+  color: var(--text-primary);
+  padding: 12px;
+  border-radius: 8px;
+  width: 250px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  z-index: 100;
+  display: none;
   pointer-events: none;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  z-index: 20;
+  border: 1px solid var(--border-color);
+  text-align: left;
 }
 
-/* Tooltip Arrow */
-.month-event-tag:hover::before {
+.month-event-tag:hover .event-tooltip {
+  display: block;
+}
+
+.event-tooltip::after {
   content: '';
   position: absolute;
-  bottom: 100%;
+  top: 100%;
   left: 50%;
   transform: translateX(-50%);
-  border-width: 5px;
+  border-width: 6px;
   border-style: solid;
-  border-color: rgba(30, 41, 59, 0.95) transparent transparent transparent;
-  z-index: 20;
+  border-color: white transparent transparent transparent;
+}
+
+.tooltip-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.project-pill {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  font-weight: 600;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.event-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tooltip-description {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  line-height: 1.4;
+  font-weight: 400;
 }
 
 /* Ensure tooltips are not clipped by calendar containers */
