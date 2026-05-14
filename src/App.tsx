@@ -188,6 +188,9 @@ const CustomToolbar = ({ toolbar, showWeekends, setShowWeekends }: any) => {
         <button className="btn" onClick={goToNext}>
           <ChevronRight size={18} />
         </button>
+        <button className="btn" onClick={() => toolbar.onManageProjects && toolbar.onManageProjects()}>
+          Projects
+        </button>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
@@ -195,9 +198,9 @@ const CustomToolbar = ({ toolbar, showWeekends, setShowWeekends }: any) => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: 500 }}>
           <span>Weekends</span>
           <label className="switch">
-            <input 
-              type="checkbox" 
-              checked={showWeekends} 
+            <input
+              type="checkbox"
+              checked={showWeekends}
               onChange={(e) => {
                 const checked = e.target.checked;
                 setShowWeekends(checked);
@@ -206,7 +209,7 @@ const CustomToolbar = ({ toolbar, showWeekends, setShowWeekends }: any) => {
                 } else if (checked && toolbar.view === 'work_week') {
                   toolbar.onView(Views.WEEK);
                 }
-              }} 
+              }}
             />
             <span className="slider round"></span>
           </label>
@@ -214,23 +217,20 @@ const CustomToolbar = ({ toolbar, showWeekends, setShowWeekends }: any) => {
       </div>
 
       <div className="toolbar-buttons">
-        <button className="btn" onClick={() => toolbar.onManageProjects && toolbar.onManageProjects()}>
-          Projects
-        </button>
-        <button 
-          className={`btn ${toolbar.view === 'month' ? 'primary' : ''}`} 
+        <button
+          className={`btn ${toolbar.view === 'month' ? 'primary' : ''}`}
           onClick={() => toolbar.onView('month')}
         >
           Month
         </button>
-        <button 
-          className={`btn ${(toolbar.view === 'week' || toolbar.view === 'work_week') ? 'primary' : ''}`} 
+        <button
+          className={`btn ${(toolbar.view === 'week' || toolbar.view === 'work_week') ? 'primary' : ''}`}
           onClick={() => toolbar.onView(showWeekends ? Views.WEEK : Views.WORK_WEEK)}
         >
           Week
         </button>
-        <button 
-          className={`btn ${toolbar.view === 'day' ? 'primary' : ''}`} 
+        <button
+          className={`btn ${toolbar.view === 'day' ? 'primary' : ''}`}
           onClick={() => toolbar.onView('day')}
         >
           Day
@@ -300,7 +300,7 @@ const EventModal = ({
   const handleSave = () => {
     let startDate = baseDate ? new Date(baseDate) : new Date();
     let endDate = baseDate ? new Date(baseDate) : new Date();
-    
+
     if (start) {
       const [h, m] = start.split(':').map(Number);
       startDate.setHours(h, m, 0, 0);
@@ -309,7 +309,7 @@ const EventModal = ({
       const [h, m] = end.split(':').map(Number);
       endDate.setHours(h, m, 0, 0);
     }
-    
+
     if (endDate < startDate) {
       endDate.setDate(endDate.getDate() + 1);
     }
@@ -338,7 +338,7 @@ const EventModal = ({
       <div className="modal-content">
         <div className="modal-header">
           {mode === 'create' ? 'New Event' : 'Edit Event'}
-          <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',fontSize:'1.2rem'}}>&times;</button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem' }}>&times;</button>
         </div>
         <div className="form-group">
           <label>Title</label>
@@ -357,7 +357,7 @@ const EventModal = ({
         <div className="form-group">
           <label>Project</label>
           {!newProjectMode ? (
-            <div style={{display:'flex', gap:'8px'}}>
+            <div style={{ display: 'flex', gap: '8px' }}>
               <select value={projectId} onChange={e => setProjectId(e.target.value)}>
                 <option value="">No Project</option>
                 {projects.map((p: any) => (
@@ -367,12 +367,12 @@ const EventModal = ({
               <button type="button" className="btn" onClick={() => setNewProjectMode(true)}>New</button>
             </div>
           ) : (
-            <div style={{display:'flex', gap:'8px'}}>
-              <input 
-                placeholder="New project title" 
-                value={newProjectTitle} 
-                onChange={e => setNewProjectTitle(e.target.value)} 
-                style={{flex: 1}}
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input
+                placeholder="New project title"
+                value={newProjectTitle}
+                onChange={e => setNewProjectTitle(e.target.value)}
+                style={{ flex: 1 }}
               />
               <button type="button" className="btn" onClick={() => setNewProjectMode(false)}>Cancel</button>
             </div>
@@ -384,7 +384,7 @@ const EventModal = ({
         </div>
         <div className="modal-actions">
           {mode === 'edit' && (
-            <button type="button" className="btn" style={{marginRight: 'auto', color: 'var(--indicator-color)', borderColor: 'var(--indicator-color)'}} onClick={onDelete}>
+            <button type="button" className="btn" style={{ marginRight: 'auto', color: 'var(--indicator-color)', borderColor: 'var(--indicator-color)' }} onClick={onDelete}>
               Delete
             </button>
           )}
@@ -436,9 +436,9 @@ const ProjectItem = ({ project, hasEvents, onSave, onDelete }: any) => {
           <div style={{ width: '20px', height: '20px', backgroundColor: project.color, borderRadius: '50%' }} />
           <div style={{ flex: 1 }}>{project.title}</div>
           <button className="btn" onClick={() => setIsEditing(true)} style={{ padding: '4px 8px' }}>Edit</button>
-          <button 
-            className="btn" 
-            style={{ padding: '4px 8px', color: hasEvents ? 'var(--text-secondary)' : 'var(--indicator-color)', borderColor: hasEvents ? 'var(--border-color)' : 'var(--indicator-color)', opacity: hasEvents ? 0.5 : 1, cursor: hasEvents ? 'not-allowed' : 'pointer' }} 
+          <button
+            className="btn"
+            style={{ padding: '4px 8px', color: hasEvents ? 'var(--text-secondary)' : 'var(--indicator-color)', borderColor: hasEvents ? 'var(--border-color)' : 'var(--indicator-color)', opacity: hasEvents ? 0.5 : 1, cursor: hasEvents ? 'not-allowed' : 'pointer' }}
             onClick={() => !hasEvents && onDelete(project.id)}
             title={hasEvents ? "Cannot delete project with assigned events" : ""}
             disabled={hasEvents}
@@ -466,12 +466,12 @@ const ProjectsModal = ({
       <div className="modal-content" style={{ width: '500px' }}>
         <div className="modal-header">
           Manage Projects
-          <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',fontSize:'1.2rem'}}>&times;</button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem' }}>&times;</button>
         </div>
         <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
           {projects.map((p: any) => {
-             const hasEvents = events.some((e: any) => e.projectId === p.id);
-             return <ProjectItem key={p.id} project={p} hasEvents={hasEvents} onSave={onSaveProject} onDelete={onDeleteProject} />
+            const hasEvents = events.some((e: any) => e.projectId === p.id);
+            return <ProjectItem key={p.id} project={p} hasEvents={hasEvents} onSave={onSaveProject} onDelete={onDeleteProject} />
           })}
           {projects.length === 0 && <div style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '20px' }}>No projects found.</div>}
         </div>
@@ -511,11 +511,11 @@ function App() {
     if (isInitialized) {
       storage.setSettings({ showWeekends });
     }
-    
+
     // If we hide weekends while in week view, switch to work_week
     if (!showWeekends && view === Views.WEEK) {
       setView(Views.WORK_WEEK);
-    } 
+    }
     // If we show weekends while in work_week view, switch back to week
     else if (showWeekends && view === Views.WORK_WEEK) {
       setView(Views.WEEK);
@@ -607,7 +607,7 @@ function App() {
       };
       handleEventsChange([...events, newEvent]);
     } else {
-      const nextEvents = events.map(e => 
+      const nextEvents = events.map(e =>
         e.id === modalState.event.id ? { ...e, ...data } : e
       );
       handleEventsChange(nextEvents);
@@ -741,7 +741,7 @@ function App() {
     };
 
     return {
-      toolbar: (props: any) => <CustomToolbar toolbar={{...props, onManageProjects: () => setIsProjectsModalOpen(true)}} showWeekends={showWeekends} setShowWeekends={setShowWeekends} />,
+      toolbar: (props: any) => <CustomToolbar toolbar={{ ...props, onManageProjects: () => setIsProjectsModalOpen(true) }} showWeekends={showWeekends} setShowWeekends={setShowWeekends} />,
       event: CustomEvent,
       header: CustomHeader,
       month: {
@@ -765,15 +765,15 @@ function App() {
       const time = hour * 60 + minutes;
       const day = date.getDay();
       const isWeekend = day === 0 || day === 6;
-      
+
       const classes = [];
       if (isWeekend) classes.push('rbc-weekend');
-      
+
       // 10:00 (600 mins) to 18:30 (1110 mins)
       if (time >= 600 && time < 1110) {
         classes.push('workday-slot');
       }
-      
+
       return {
         className: classes.join(' '),
       };
@@ -813,7 +813,7 @@ function App() {
           views={[Views.MONTH, Views.WEEK, Views.WORK_WEEK, Views.DAY]}
         />
       </div>
-      <EventModal 
+      <EventModal
         isOpen={modalState.isOpen}
         mode={modalState.mode}
         initialData={modalState.mode === 'edit' ? modalState.event : undefined}
@@ -824,7 +824,7 @@ function App() {
         onDelete={handleModalDelete}
         onAddProject={handleAddProject}
       />
-      <ProjectsModal 
+      <ProjectsModal
         isOpen={isProjectsModalOpen}
         projects={projects}
         events={events}
