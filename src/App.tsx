@@ -35,13 +35,16 @@ const storage = {
     if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
       return new Promise((resolve) => {
         chrome.storage.sync.get(['timeEntries'], (result: any) => {
-          if (result.timeEntries) {
-            resolve(result.timeEntries.map((e: any) => ({
+          if (result.timeEntries && Array.isArray(result.timeEntries)) {
+            const entries = result.timeEntries.map((e: any) => ({
               ...e,
               start: new Date(e.start),
               end: new Date(e.end),
-            })));
+            }));
+            console.log('Loaded from chrome.storage:', entries);
+            resolve(entries);
           } else {
+            console.log('No entries found in chrome.storage');
             resolve([]);
           }
         });
@@ -50,22 +53,40 @@ const storage = {
       // Fallback for local development
       const stored = localStorage.getItem('timeEntries');
       if (stored) {
-        return JSON.parse(stored).map((e: any) => ({
+        const entries = JSON.parse(stored).map((e: any) => ({
           ...e,
           start: new Date(e.start),
           end: new Date(e.end),
         }));
+        console.log('Loaded from localStorage:', entries);
+        return entries;
       }
       return [];
     }
   },
   set: async (entries: TimeEntry[]) => {
+    // Ensure dates are serialized to strings for storage
+    const serializedEntries = entries.map(e => ({
+      ...e,
+      start: e.start instanceof Date ? e.start.toISOString() : e.start,
+      end: e.end instanceof Date ? e.end.toISOString() : e.end,
+    }));
+
     if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
-      return new Promise<void>((resolve) => {
-        chrome.storage.sync.set({ timeEntries: entries }, () => resolve());
+      return new Promise<void>((resolve, reject) => {
+        chrome.storage.sync.set({ timeEntries: serializedEntries }, () => {
+          if (chrome.runtime.lastError) {
+            console.error('Storage set error:', chrome.runtime.lastError);
+            reject(chrome.runtime.lastError);
+          } else {
+            console.log('Saved to chrome.storage:', serializedEntries);
+            resolve();
+          }
+        });
       });
     } else {
-      localStorage.setItem('timeEntries', JSON.stringify(entries));
+      localStorage.setItem('timeEntries', JSON.stringify(serializedEntries));
+      console.log('Saved to localStorage:', serializedEntries);
     }
   }
 };
@@ -134,13 +155,16 @@ function App() {
   const [events, setEvents] = useState<TimeEntry[]>([]);
 
   useEffect(() => {
+    if (typeof chrome === 'undefined' || !chrome.storage) {
+      console.warn('Chrome storage API not available. Using localStorage fallback.');
+    }
     storage.get().then(setEvents);
   }, []);
 
-  const handleEventsChange = (newEvents: TimeEntry[]) => {
+  const handleEventsChange = useCallback((newEvents: TimeEntry[]) => {
     setEvents(newEvents);
     storage.set(newEvents);
-  };
+  }, []);
 
   const onEventResize = useCallback(
     ({ event, start, end }: any) => {
