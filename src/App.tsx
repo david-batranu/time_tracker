@@ -676,9 +676,17 @@ function App() {
     const CustomEvent = ({ event }: any) => {
       if (!event) return null;
       const duration = formatDuration(event.start, event.end);
+      const proj = projects.find(p => p.id === event.projectId);
       return (
-        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-          <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{event.title || 'Untitled'}</div>
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', position: 'relative' }}>
+          {proj && (
+            <div style={{ position: 'absolute', top: 0, right: 0 }}>
+              <span className="project-pill" style={{ fontSize: '9px', padding: '1px 5px', opacity: 0.9, backgroundColor: 'rgba(255,255,255,0.3)' }}>
+                {proj.title}
+              </span>
+            </div>
+          )}
+          <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', paddingRight: proj ? '45px' : '0' }}>{event.title || 'Untitled'}</div>
           <div style={{ fontSize: '0.85em', opacity: 0.8 }}>{duration}</div>
           {event.description && (
             <div style={{ 
