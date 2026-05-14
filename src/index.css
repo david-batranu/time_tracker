@@ -304,3 +304,86 @@ body {
 .rbc-date-cell {
   overflow: visible !important;
 }
+
+/* Weekend Styling */
+.rbc-weekend {
+  background-color: rgba(247, 127, 0, 0.04) !important;
+}
+
+/* Optional: Make the weekend header labels also slightly different */
+.rbc-header.rbc-weekend {
+  color: var(--primary-color);
+  opacity: 0.8;
+}
+
+/* Switch Toggle Styles */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 20px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: .4s;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .4s;
+}
+
+input:checked + .slider {
+  background-color: var(--primary-color);
+}
+
+input:focus + .slider {
+  box-shadow: 0 0 1px var(--primary-color);
+}
+
+input:checked + .slider:before {
+  transform: translateX(20px);
+}
+
+.slider.round {
+  border-radius: 20px;
+}
+
+.slider.round:before {
+  border-radius: 50%;
+}
+
+/* Hide weekends in Month View and adjust grid */
+.hide-weekends .rbc-month-view .rbc-weekend {
+  display: none !important;
+}
+
+.hide-weekends .rbc-month-view .rbc-day-bg,
+.hide-weekends .rbc-month-view .rbc-header,
+.hide-weekends .rbc-month-view .rbc-date-cell {
+  flex-basis: 20% !important;
+  max-width: 20% !important;
+}
+
+.hide-weekends .rbc-month-view .rbc-row {
+  display: flex !important;
+}
