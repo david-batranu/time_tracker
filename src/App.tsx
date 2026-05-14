@@ -15,20 +15,28 @@ moment.locale(userLocale);
 const localizer = momentLocalizer(moment);
 const DnDCalendar = withDragAndDrop(Calendar);
 
+interface Project {
+  id: string;
+  title: string;
+  color: string;
+}
+
 interface TimeEntry {
   id: string;
   title: string;
   start: Date;
   end: Date;
   color?: string;
+  projectId?: string;
+  description?: string;
 }
 
 const COLORS = [
-  'var(--event-color-1)',
-  'var(--event-color-2)',
-  'var(--event-color-3)',
-  'var(--event-color-4)',
-  'var(--event-color-5)'
+  '#fce7f3',
+  '#dcfce7',
+  '#fef08a',
+  '#e0e7ff',
+  '#ffedd5'
 ];
 
 // Storage helper
@@ -109,6 +117,25 @@ const storage = {
     } else {
       localStorage.setItem('settings', JSON.stringify(settings));
     }
+  },
+  getProjects: async (): Promise<Project[]> => {
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
+      return new Promise((resolve) => {
+        chrome.storage.sync.get(['projects'], (result: any) => {
+          resolve(result.projects || []);
+        });
+      });
+    } else {
+      const stored = localStorage.getItem('projects');
+      return stored ? JSON.parse(stored) : [];
+    }
+  },
+  setProjects: async (projects: Project[]) => {
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
+      chrome.storage.sync.set({ projects });
+    } else {
+      localStorage.setItem('projects', JSON.stringify(projects));
+    }
   }
 };
 
@@ -187,6 +214,9 @@ const CustomToolbar = ({ toolbar, showWeekends, setShowWeekends }: any) => {
       </div>
 
       <div className="toolbar-buttons">
+        <button className="btn" onClick={() => toolbar.onManageProjects && toolbar.onManageProjects()}>
+          Projects
+        </button>
         <button 
           className={`btn ${toolbar.view === 'month' ? 'primary' : ''}`} 
           onClick={() => toolbar.onView('month')}
@@ -210,18 +240,267 @@ const CustomToolbar = ({ toolbar, showWeekends, setShowWeekends }: any) => {
   );
 };
 
+const EventModal = ({
+  isOpen,
+  mode,
+  initialData,
+  slot,
+  projects,
+  onClose,
+  onSave,
+  onDelete,
+  onAddProject
+}: any) => {
+  const [title, setTitle] = useState('');
+  const [projectId, setProjectId] = useState('');
+  const [description, setDescription] = useState('');
+  const [newProjectMode, setNewProjectMode] = useState(false);
+  const [newProjectTitle, setNewProjectTitle] = useState('');
+  const [start, setStart] = useState('');
+  const [end, setEnd] = useState('');
+  const [baseDate, setBaseDate] = useState<Date | null>(null);
+
+  const formatTimeForInput = (date: Date) => {
+    if (!date) return '';
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      setTitle(initialData?.title || '');
+      setProjectId(initialData?.projectId || '');
+      setDescription(initialData?.description || '');
+      setNewProjectMode(false);
+      setNewProjectTitle('');
+      let bDate = new Date();
+      if (initialData?.start) {
+        bDate = new Date(initialData.start);
+        setStart(formatTimeForInput(new Date(initialData.start)));
+      } else if (slot?.start) {
+        bDate = new Date(slot.start);
+        setStart(formatTimeForInput(new Date(slot.start)));
+      } else {
+        setStart('');
+      }
+      setBaseDate(bDate);
+
+      if (initialData?.end) {
+        setEnd(formatTimeForInput(new Date(initialData.end)));
+      } else if (slot?.end) {
+        setEnd(formatTimeForInput(new Date(slot.end)));
+      } else {
+        setEnd('');
+      }
+    }
+  }, [isOpen, initialData, slot]);
+
+  if (!isOpen) return null;
+
+  const handleSave = () => {
+    let startDate = baseDate ? new Date(baseDate) : new Date();
+    let endDate = baseDate ? new Date(baseDate) : new Date();
+    
+    if (start) {
+      const [h, m] = start.split(':').map(Number);
+      startDate.setHours(h, m, 0, 0);
+    }
+    if (end) {
+      const [h, m] = end.split(':').map(Number);
+      endDate.setHours(h, m, 0, 0);
+    }
+    
+    if (endDate < startDate) {
+      endDate.setDate(endDate.getDate() + 1);
+    }
+    if (newProjectMode && newProjectTitle.trim()) {
+      const newProj = onAddProject(newProjectTitle.trim());
+      onSave({
+        title,
+        projectId: newProj.id,
+        description,
+        start: startDate,
+        end: endDate
+      });
+    } else {
+      onSave({
+        title,
+        projectId,
+        description,
+        start: startDate,
+        end: endDate
+      });
+    }
+  };
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-content">
+        <div className="modal-header">
+          {mode === 'create' ? 'New Event' : 'Edit Event'}
+          <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',fontSize:'1.2rem'}}>&times;</button>
+        </div>
+        <div className="form-group">
+          <label>Title</label>
+          <input value={title} onChange={e => setTitle(e.target.value)} autoFocus />
+        </div>
+        <div style={{ display: 'flex', gap: '16px' }}>
+          <div className="form-group" style={{ flex: 1 }}>
+            <label>Start</label>
+            <input type="time" value={start} onChange={e => setStart(e.target.value)} />
+          </div>
+          <div className="form-group" style={{ flex: 1 }}>
+            <label>End</label>
+            <input type="time" value={end} onChange={e => setEnd(e.target.value)} />
+          </div>
+        </div>
+        <div className="form-group">
+          <label>Project</label>
+          {!newProjectMode ? (
+            <div style={{display:'flex', gap:'8px'}}>
+              <select value={projectId} onChange={e => setProjectId(e.target.value)}>
+                <option value="">No Project</option>
+                {projects.map((p: any) => (
+                  <option key={p.id} value={p.id}>{p.title}</option>
+                ))}
+              </select>
+              <button type="button" className="btn" onClick={() => setNewProjectMode(true)}>New</button>
+            </div>
+          ) : (
+            <div style={{display:'flex', gap:'8px'}}>
+              <input 
+                placeholder="New project title" 
+                value={newProjectTitle} 
+                onChange={e => setNewProjectTitle(e.target.value)} 
+                style={{flex: 1}}
+              />
+              <button type="button" className="btn" onClick={() => setNewProjectMode(false)}>Cancel</button>
+            </div>
+          )}
+        </div>
+        <div className="form-group">
+          <label>Description</label>
+          <textarea value={description} onChange={e => setDescription(e.target.value)} />
+        </div>
+        <div className="modal-actions">
+          {mode === 'edit' && (
+            <button type="button" className="btn" style={{marginRight: 'auto', color: 'var(--indicator-color)', borderColor: 'var(--indicator-color)'}} onClick={onDelete}>
+              Delete
+            </button>
+          )}
+          <button type="button" className="btn" onClick={onClose}>Cancel</button>
+          <button type="button" className="btn primary" onClick={handleSave}>Save</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const ProjectItem = ({ project, hasEvents, onSave, onDelete }: any) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [title, setTitle] = useState(project.title);
+
+  const resolveColor = (c: string) => {
+    if (c && c.startsWith('var(')) {
+      const varName = c.match(/var\(([^)]+)\)/)?.[1];
+      if (varName) {
+        return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+      }
+    }
+    return c || '#e0e7ff';
+  };
+
+  const [color, setColor] = useState(resolveColor(project.color));
+
+  useEffect(() => {
+    setColor(resolveColor(project.color));
+    setTitle(project.title);
+  }, [project]);
+
+  const handleSave = () => {
+    onSave({ ...project, title, color });
+    setIsEditing(false);
+  };
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', padding: '8px', border: '1px solid var(--border-color)', borderRadius: '4px' }}>
+      {isEditing ? (
+        <>
+          <input type="color" value={color} onChange={e => setColor(e.target.value)} style={{ padding: 0, border: 'none', background: 'none', width: '24px', height: '24px', cursor: 'pointer' }} />
+          <input value={title} onChange={e => setTitle(e.target.value)} style={{ flex: 1, padding: '4px 8px', border: '1px solid var(--border-color)', borderRadius: '4px' }} autoFocus />
+          <button className="btn primary" onClick={handleSave} style={{ padding: '4px 8px' }}>Save</button>
+          <button className="btn" onClick={() => { setIsEditing(false); setTitle(project.title); setColor(project.color); }} style={{ padding: '4px 8px' }}>Cancel</button>
+        </>
+      ) : (
+        <>
+          <div style={{ width: '20px', height: '20px', backgroundColor: project.color, borderRadius: '50%' }} />
+          <div style={{ flex: 1 }}>{project.title}</div>
+          <button className="btn" onClick={() => setIsEditing(true)} style={{ padding: '4px 8px' }}>Edit</button>
+          <button 
+            className="btn" 
+            style={{ padding: '4px 8px', color: hasEvents ? 'var(--text-secondary)' : 'var(--indicator-color)', borderColor: hasEvents ? 'var(--border-color)' : 'var(--indicator-color)', opacity: hasEvents ? 0.5 : 1, cursor: hasEvents ? 'not-allowed' : 'pointer' }} 
+            onClick={() => !hasEvents && onDelete(project.id)}
+            title={hasEvents ? "Cannot delete project with assigned events" : ""}
+            disabled={hasEvents}
+          >
+            Delete
+          </button>
+        </>
+      )}
+    </div>
+  );
+};
+
+const ProjectsModal = ({
+  isOpen,
+  projects,
+  events,
+  onClose,
+  onSaveProject,
+  onDeleteProject
+}: any) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-content" style={{ width: '500px' }}>
+        <div className="modal-header">
+          Manage Projects
+          <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',fontSize:'1.2rem'}}>&times;</button>
+        </div>
+        <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+          {projects.map((p: any) => {
+             const hasEvents = events.some((e: any) => e.projectId === p.id);
+             return <ProjectItem key={p.id} project={p} hasEvents={hasEvents} onSave={onSaveProject} onDelete={onDeleteProject} />
+          })}
+          {projects.length === 0 && <div style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '20px' }}>No projects found.</div>}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 function App() {
   const [events, setEvents] = useState<TimeEntry[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [view, setView] = useState<any>(Views.WEEK);
   const [date, setDate] = useState(new Date());
   const [showWeekends, setShowWeekends] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [modalState, setModalState] = useState<{
+    isOpen: boolean;
+    mode: 'create' | 'edit';
+    event?: any;
+    slot?: any;
+  }>({ isOpen: false, mode: 'create' });
+  const [isProjectsModalOpen, setIsProjectsModalOpen] = useState(false);
 
   useEffect(() => {
     if (typeof chrome === 'undefined' || !chrome.storage) {
       console.warn('Chrome storage API not available. Using localStorage fallback.');
     }
     storage.get().then(setEvents);
+    storage.getProjects().then(setProjects);
     storage.getSettings().then(s => {
       setShowWeekends(s.showWeekends);
       setIsInitialized(true);
@@ -284,19 +563,9 @@ function App() {
         setView(Views.WEEK);
         return;
       }
-      const title = window.prompt('New Event Name');
-      if (title) {
-        const newEvent: TimeEntry = {
-          id: uuidv4(),
-          title,
-          start,
-          end,
-          color: COLORS[Math.floor(Math.random() * COLORS.length)]
-        };
-        handleEventsChange([...events, newEvent]);
-      }
+      setModalState({ isOpen: true, mode: 'create', slot: { start, end } });
     },
-    [events, handleEventsChange, view]
+    [view]
   );
 
   const handleSelectEvent = useCallback(
@@ -308,20 +577,63 @@ function App() {
         }
         return;
       }
-      const title = window.prompt('Update Event Name', event.title || '');
-      if (title === "") {
-        // Delete
-        const nextEvents = events.filter((e) => e.id !== event.id);
-        handleEventsChange(nextEvents);
-      } else if (title) {
-        const nextEvents = events.map((e) =>
-          e.id === event.id ? { ...e, title } : e
-        );
-        handleEventsChange(nextEvents);
-      }
+      setModalState({ isOpen: true, mode: 'edit', event });
     },
-    [events, handleEventsChange, view]
+    [view]
   );
+
+  const handleAddProject = (title: string) => {
+    const newProj: Project = {
+      id: uuidv4(),
+      title,
+      color: COLORS[Math.floor(Math.random() * COLORS.length)]
+    };
+    const newProjects = [...projects, newProj];
+    setProjects(newProjects);
+    storage.setProjects(newProjects);
+    return newProj;
+  };
+
+  const handleModalSave = (data: any) => {
+    if (modalState.mode === 'create') {
+      const newEvent: TimeEntry = {
+        id: uuidv4(),
+        title: data.title,
+        start: data.start,
+        end: data.end,
+        projectId: data.projectId,
+        description: data.description,
+        color: COLORS[Math.floor(Math.random() * COLORS.length)] // Legacy
+      };
+      handleEventsChange([...events, newEvent]);
+    } else {
+      const nextEvents = events.map(e => 
+        e.id === modalState.event.id ? { ...e, ...data } : e
+      );
+      handleEventsChange(nextEvents);
+    }
+    setModalState({ isOpen: false, mode: 'create' });
+  };
+
+  const handleModalDelete = () => {
+    if (modalState.mode === 'edit') {
+      const nextEvents = events.filter((e) => e.id !== modalState.event.id);
+      handleEventsChange(nextEvents);
+    }
+    setModalState({ isOpen: false, mode: 'create' });
+  };
+
+  const handleUpdateProject = (updatedProj: Project) => {
+    const newProjects = projects.map(p => p.id === updatedProj.id ? updatedProj : p);
+    setProjects(newProjects);
+    storage.setProjects(newProjects);
+  };
+
+  const handleDeleteProject = (projectId: string) => {
+    const newProjects = projects.filter(p => p.id !== projectId);
+    setProjects(newProjects);
+    storage.setProjects(newProjects);
+  };
 
   const { defaultDate, scrollToTime } = useMemo(
     () => ({
@@ -348,14 +660,16 @@ function App() {
   const eventPropGetter = useCallback(
     (event: any) => {
       if (!event) return {};
+      const proj = projects.find(p => p.id === event.projectId);
+      const color = proj ? proj.color : (event.color || 'var(--event-color-4)');
       return {
         style: {
-          backgroundColor: event.color,
+          backgroundColor: color,
           color: 'var(--text-primary)', // Dark text for pastel colors
         },
       };
     },
-    []
+    [projects]
   );
 
   const components = useMemo(() => {
@@ -414,7 +728,7 @@ function App() {
                   key={e.id}
                   data-title={e.title || 'Untitled'}
                   className="month-event-tag"
-                  style={{ backgroundColor: e.color || 'var(--event-color-4)' }}
+                  style={{ backgroundColor: projects.find(p => p.id === e.projectId)?.color || e.color || 'var(--event-color-4)' }}
                 >
                   {formatDuration(e.start, e.end)}
                 </div>
@@ -426,14 +740,14 @@ function App() {
     };
 
     return {
-      toolbar: (props: any) => <CustomToolbar toolbar={props} showWeekends={showWeekends} setShowWeekends={setShowWeekends} />,
+      toolbar: (props: any) => <CustomToolbar toolbar={{...props, onManageProjects: () => setIsProjectsModalOpen(true)}} showWeekends={showWeekends} setShowWeekends={setShowWeekends} />,
       event: CustomEvent,
       header: CustomHeader,
       month: {
         dateHeader: CustomDateHeader
       }
     };
-  }, [events, showWeekends]);
+  }, [events, showWeekends, projects]);
 
   const formats = useMemo(() => ({
     timeGutterFormat: 'HH:mm',
@@ -498,6 +812,25 @@ function App() {
           views={[Views.MONTH, Views.WEEK, Views.WORK_WEEK, Views.DAY]}
         />
       </div>
+      <EventModal 
+        isOpen={modalState.isOpen}
+        mode={modalState.mode}
+        initialData={modalState.mode === 'edit' ? modalState.event : undefined}
+        slot={modalState.mode === 'create' ? modalState.slot : undefined}
+        projects={projects}
+        onClose={() => setModalState({ isOpen: false, mode: 'create' })}
+        onSave={handleModalSave}
+        onDelete={handleModalDelete}
+        onAddProject={handleAddProject}
+      />
+      <ProjectsModal 
+        isOpen={isProjectsModalOpen}
+        projects={projects}
+        events={events}
+        onClose={() => setIsProjectsModalOpen(false)}
+        onSaveProject={handleUpdateProject}
+        onDeleteProject={handleDeleteProject}
+      />
     </div>
   );
 }
