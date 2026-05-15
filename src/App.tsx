@@ -171,7 +171,7 @@ const CustomToolbar = ({ toolbar, showWeekends, setShowWeekends }: any) => {
     const date = moment(toolbar.date);
     return (
       <span className="toolbar-title">
-        {date.format('MMMM YYYY')} &bull; W{date.format('ww')}
+        {date.format('MMMM YYYY')}
       </span>
     );
   };
@@ -689,11 +689,11 @@ function App() {
           <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', paddingRight: proj ? '45px' : '0' }}>{event.title || 'Untitled'}</div>
           <div style={{ fontSize: '0.85em', opacity: 0.8 }}>{duration}</div>
           {event.description && (
-            <div style={{ 
-              fontSize: '0.75em', 
-              opacity: 0.7, 
-              marginTop: '2px', 
-              overflow: 'hidden', 
+            <div style={{
+              fontSize: '0.75em',
+              opacity: 0.7,
+              marginTop: '2px',
+              overflow: 'hidden',
               textOverflow: 'ellipsis',
               display: '-webkit-box',
               WebkitLineClamp: 3,
