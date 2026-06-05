@@ -1,6 +1,6 @@
 import { ToolbarProps, Views } from 'react-big-calendar';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import moment from 'moment/min/moment-with-locales';
+import { format } from 'date-fns';
 import { TimeEntry } from '../types';
 
 export interface CustomToolbarProps extends ToolbarProps<TimeEntry> {
@@ -32,10 +32,9 @@ export const CustomToolbar = ({
   };
 
   const labelNode = () => {
-    const d = moment(date);
     return (
       <span className="toolbar-title">
-        {d.format('MMMM YYYY')}
+        {format(date, 'MMMM yyyy')}
       </span>
     );
   };
@@ -68,7 +67,6 @@ export const CustomToolbar = ({
               onChange={(e) => {
                 const checked = e.target.checked;
                 setShowWeekends(checked);
-                // We leave the actual view update effect to App.tsx so it stays synchronized
               }}
             />
             <span className="slider round"></span>

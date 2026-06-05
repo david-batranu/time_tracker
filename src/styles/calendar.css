@@ -1,0 +1,136 @@
+/* React Big Calendar Overrides */
+.rbc-calendar {
+  flex: 1;
+}
+
+.rbc-header {
+  padding: 12px 0;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-secondary);
+  border-bottom: 2px solid var(--border-color);
+}
+
+.rbc-allday-cell {
+  display: none;
+}
+
+.rbc-time-view {
+  border: none;
+}
+
+.rbc-time-header.rbc-overflowing {
+  border-right: none;
+}
+
+.rbc-time-content {
+  border-top: none;
+}
+
+.rbc-day-slot .rbc-time-slot {
+  border-top: 1px dotted rgba(226, 232, 240, 0.5);
+}
+
+.rbc-timeslot-group {
+  border-bottom: 1px solid var(--border-color);
+  min-height: 48px;
+}
+
+.rbc-event {
+  background-color: var(--event-color-4);
+  border: none;
+  color: var(--text-primary);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.rbc-event:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.rbc-event-content {
+  font-weight: 500;
+}
+
+.rbc-today {
+  background-color: var(--today-bg);
+}
+
+.rbc-current-time-indicator {
+  background-color: var(--indicator-color);
+  height: 2px;
+}
+
+.rbc-current-time-indicator::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: -4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: var(--indicator-color);
+}
+
+/* Custom Toolbar Styles */
+.toolbar-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding: 1rem 1rem 0 1rem;
+}
+
+.toolbar-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.toolbar-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Workday Highlight */
+.workday-slot {
+  background-color: var(--workday-bg) !important;
+}
+
+/* Weekend Styling */
+.rbc-weekend {
+  background-color: rgba(247, 127, 0, 0.04) !important;
+}
+
+.rbc-header.rbc-weekend {
+  color: var(--primary-color);
+  opacity: 0.8;
+}
+
+/* Hide Weekends in Grid */
+.hide-weekends .rbc-month-view .rbc-weekend {
+  display: none !important;
+}
+
+.hide-weekends .rbc-month-view .rbc-header:has(.is-weekend-header) {
+  display: none !important;
+}
+
+.hide-weekends .rbc-month-view .rbc-day-bg,
+.hide-weekends .rbc-month-view .rbc-header,
+.hide-weekends .rbc-month-view .rbc-date-cell {
+  flex-basis: 20% !important;
+  max-width: 20% !important;
+}
+
+.hide-weekends .rbc-month-view .rbc-date-cell:has(.is-weekend-date) {
+  display: none !important;
+}
+
+.hide-weekends .rbc-month-view .rbc-row {
+  display: flex !important;
+}

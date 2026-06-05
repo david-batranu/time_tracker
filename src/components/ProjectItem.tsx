@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Project } from '../types';
 
 interface ProjectItemProps {
@@ -8,7 +8,7 @@ interface ProjectItemProps {
   onDelete: (projectId: string) => void;
 }
 
-export const ProjectItem = ({ project, hasEvents, onSave, onDelete }: ProjectItemProps) => {
+export const ProjectItem = React.memo(({ project, hasEvents, onSave, onDelete }: ProjectItemProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [title, setTitle] = useState(project.title);
 
@@ -45,7 +45,7 @@ export const ProjectItem = ({ project, hasEvents, onSave, onDelete }: ProjectIte
         </>
       ) : (
         <>
-          <div style={{ width: '20px', height: '20px', backgroundColor: project.color, borderRadius: '50%' }} />
+          <div style={{ width: '20px', height: '20px', backgroundColor: resolveColor(project.color), borderRadius: '50%' }} />
           <div style={{ flex: 1 }}>{project.title}</div>
           <button className="btn" onClick={() => setIsEditing(true)} style={{ padding: '4px 8px' }}>Edit</button>
           <button
@@ -61,4 +61,6 @@ export const ProjectItem = ({ project, hasEvents, onSave, onDelete }: ProjectIte
       )}
     </div>
   );
-};
+});
+
+ProjectItem.displayName = 'ProjectItem';

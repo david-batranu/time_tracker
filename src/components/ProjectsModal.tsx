@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Project, TimeEntry } from '../types';
 import { ProjectItem } from './ProjectItem';
 
@@ -23,6 +23,17 @@ export const ProjectsModal = ({
 }: ProjectsModalProps) => {
   const [isAdding, setIsAdding] = useState(false);
   const [newTitle, setNewTitle] = useState('');
+
+  // Pre-compute project IDs that have events for O(1) lookups in render loop
+  const projectsWithEvents = useMemo(() => {
+    const set = new Set<string>();
+    for (const e of events) {
+      if (e.projectId) {
+        set.add(e.projectId);
+      }
+    }
+    return set;
+  }, [events]);
 
   if (!isOpen) return null;
 
@@ -66,7 +77,7 @@ export const ProjectsModal = ({
 
         <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
           {projects.map((p) => {
-            const hasEvents = events.some((e) => e.projectId === p.id);
+            const hasEvents = projectsWithEvents.has(p.id);
             return (
               <ProjectItem 
                 key={p.id} 

@@ -29,6 +29,7 @@ export const EventModal = ({
   const [description, setDescription] = useState('');
   const [newProjectMode, setNewProjectMode] = useState(false);
   const [newProjectTitle, setNewProjectTitle] = useState('');
+  const [error, setError] = useState<string | null>(null);
   
   // We need to keep track of full dates to support multi-day events
   const [startDateStr, setStartDateStr] = useState('');
@@ -48,6 +49,20 @@ export const EventModal = ({
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
   };
 
+  const parseLocalISO = (dateStr: string, timeStr: string): Date => {
+    const parts = dateStr.split('-').map(Number);
+    const year = parts[0] || 0;
+    const month = parts[1] || 1;
+    const day = parts[2] || 1;
+    
+    const timeParts = (timeStr || '00:00').split(':').map(Number);
+    const hours = timeParts[0] || 0;
+    const minutes = timeParts[1] || 0;
+    
+    // month is 0-indexed in JS Date constructor
+    return new Date(year, month - 1, day, hours, minutes, 0, 0);
+  };
+
   useEffect(() => {
     if (isOpen) {
       setTitle(initialData?.title || '');
@@ -55,6 +70,7 @@ export const EventModal = ({
       setDescription(initialData?.description || '');
       setNewProjectMode(false);
       setNewProjectTitle('');
+      setError(null);
       
       let startD = new Date();
       let endD = new Date();
@@ -86,17 +102,24 @@ export const EventModal = ({
   if (!isOpen) return null;
 
   const handleSave = () => {
-    // Reconstruct start and end dates from strings
-    const startDate = new Date(`${startDateStr}T${startTimeStr || '00:00'}:00`);
-    const endDate = new Date(`${endDateStr}T${endTimeStr || '00:00'}:00`);
+    setError(null);
+
+    if (!startDateStr || !endDateStr) {
+      setError("Please fill in start and end dates.");
+      return;
+    }
+
+    // Reconstruct start and end dates from strings as local times
+    const startDate = parseLocalISO(startDateStr, startTimeStr);
+    const endDate = parseLocalISO(endDateStr, endTimeStr);
 
     if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-      alert("Invalid date/time format.");
+      setError("Invalid date/time format.");
       return;
     }
 
     if (endDate < startDate) {
-      alert("End time must be after start time.");
+      setError("End time must be after start time.");
       return;
     }
     
@@ -132,36 +155,52 @@ export const EventModal = ({
           {mode === 'create' ? 'New Event' : 'Edit Event'}
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem' }}>&times;</button>
         </div>
+
+        {error && (
+          <div style={{
+            color: 'var(--indicator-color)',
+            backgroundColor: 'rgba(239, 68, 68, 0.08)',
+            padding: '8px 12px',
+            borderRadius: '6px',
+            marginBottom: '16px',
+            fontSize: '0.85rem',
+            fontWeight: 500,
+            border: '1px solid rgba(239, 68, 68, 0.2)'
+          }}>
+            {error}
+          </div>
+        )}
+
         <div className="form-group">
-          <label>Title</label>
-          <input value={title} onChange={e => setTitle(e.target.value)} maxLength={100} autoFocus />
+          <label htmlFor="event-title">Title</label>
+          <input id="event-title" value={title} onChange={e => setTitle(e.target.value)} maxLength={100} autoFocus />
         </div>
         
         <div style={{ display: 'flex', gap: '16px' }}>
           <div className="form-group" style={{ flex: 1 }}>
-            <label>Start Date & Time</label>
+            <label htmlFor="event-start-date">Start Date & Time</label>
             <div style={{ display: 'flex', gap: '8px' }}>
-              <input type="date" value={startDateStr} onChange={e => setStartDateStr(e.target.value)} style={{ flex: 2 }} />
-              <input type="time" value={startTimeStr} onChange={e => setStartTimeStr(e.target.value)} style={{ flex: 1 }} />
+              <input id="event-start-date" type="date" value={startDateStr} onChange={e => setStartDateStr(e.target.value)} style={{ flex: 2 }} />
+              <input id="event-start-time" type="time" value={startTimeStr} onChange={e => setStartTimeStr(e.target.value)} style={{ flex: 1 }} aria-label="Start Time" />
             </div>
           </div>
         </div>
         
         <div style={{ display: 'flex', gap: '16px' }}>
           <div className="form-group" style={{ flex: 1 }}>
-            <label>End Date & Time</label>
+            <label htmlFor="event-end-date">End Date & Time</label>
             <div style={{ display: 'flex', gap: '8px' }}>
-              <input type="date" value={endDateStr} onChange={e => setEndDateStr(e.target.value)} style={{ flex: 2 }} />
-              <input type="time" value={endTimeStr} onChange={e => setEndTimeStr(e.target.value)} style={{ flex: 1 }} />
+              <input id="event-end-date" type="date" value={endDateStr} onChange={e => setEndDateStr(e.target.value)} style={{ flex: 2 }} />
+              <input id="event-end-time" type="time" value={endTimeStr} onChange={e => setEndTimeStr(e.target.value)} style={{ flex: 1 }} aria-label="End Time" />
             </div>
           </div>
         </div>
 
         <div className="form-group">
-          <label>Project</label>
+          <label htmlFor="event-project">Project</label>
           {!newProjectMode ? (
             <div style={{ display: 'flex', gap: '8px' }}>
-              <select value={projectId} onChange={e => setProjectId(e.target.value)} style={{ flex: 1 }}>
+              <select id="event-project" value={projectId} onChange={e => setProjectId(e.target.value)} style={{ flex: 1 }}>
                 <option value="">No Project</option>
                 {projects.map((p) => (
                   <option key={p.id} value={p.id}>{p.title}</option>
@@ -172,6 +211,7 @@ export const EventModal = ({
           ) : (
             <div style={{ display: 'flex', gap: '8px' }}>
               <input
+                id="event-project-new"
                 placeholder="New project title"
                 value={newProjectTitle}
                 onChange={e => setNewProjectTitle(e.target.value)}
@@ -183,8 +223,8 @@ export const EventModal = ({
           )}
         </div>
         <div className="form-group">
-          <label>Description</label>
-          <textarea value={description} onChange={e => setDescription(e.target.value)} maxLength={500} />
+          <label htmlFor="event-description">Description</label>
+          <textarea id="event-description" value={description} onChange={e => setDescription(e.target.value)} maxLength={500} />
         </div>
         <div className="modal-actions">
           {mode === 'edit' && (

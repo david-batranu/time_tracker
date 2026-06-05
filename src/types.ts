@@ -14,12 +14,10 @@ export interface TimeEntry {
   description?: string;
 }
 
-export interface ModalState {
-  isOpen: boolean;
-  mode: 'create' | 'edit';
-  event?: TimeEntry;
-  slot?: { start: Date; end: Date };
-}
+export type ModalState =
+  | { isOpen: false; mode?: never; event?: never; slot?: never }
+  | { isOpen: true; mode: 'create'; slot: { start: Date; end: Date }; event?: never }
+  | { isOpen: true; mode: 'edit'; event: TimeEntry; slot?: never };
 
 export interface Settings {
   showWeekends: boolean;

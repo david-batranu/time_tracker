@@ -1,11 +1,12 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
-import { Calendar, momentLocalizer, Views, View, EventProps, HeaderProps, DateHeaderProps, SlotInfo } from 'react-big-calendar';
+import { useState, useCallback, useMemo } from 'react';
+import { Calendar, dateFnsLocalizer, Views, View, EventProps, HeaderProps, DateHeaderProps, SlotInfo } from 'react-big-calendar';
 import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop';
-import moment from 'moment/min/moment-with-locales';
-import { v4 as uuidv4 } from 'uuid';
+import { format, parse, startOfWeek, getDay } from 'date-fns';
+import { enUS } from 'date-fns/locale';
 
-import { storage } from './storage';
-import { TimeEntry, Project, ModalState, COLORS, formatDuration, formatMs } from './types';
+import { useCalendarEvents } from './hooks/useCalendarEvents';
+import { useProjects } from './hooks/useProjects';
+import { TimeEntry, ModalState, formatDuration, formatMs } from './types';
 import { EventModal } from './components/EventModal';
 import { ProjectsModal } from './components/ProjectsModal';
 import { CustomToolbar } from './components/CustomToolbar';
@@ -13,74 +14,79 @@ import { CustomToolbar } from './components/CustomToolbar';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 
-const userLocale = Intl.DateTimeFormat().resolvedOptions().locale;
-moment.locale(userLocale);
-const localizer = momentLocalizer(moment);
+const getWeekStartsOn = (): 0 | 1 | 2 | 3 | 4 | 5 | 6 => {
+  try {
+    const localeId = Intl.DateTimeFormat().resolvedOptions().locale;
+    const locale = new Intl.Locale(localeId) as any;
+    if (locale.weekInfo && typeof locale.weekInfo.firstDay === 'number') {
+      const firstDay = locale.weekInfo.firstDay;
+      return (firstDay === 7 ? 0 : firstDay) as 0 | 1 | 2 | 3 | 4 | 5 | 6;
+    }
+  } catch (e) {
+    console.error('Failed to detect week start day:', e);
+  }
+  const lang = Intl.DateTimeFormat().resolvedOptions().locale.toLowerCase();
+  if (lang.startsWith('en-us') || lang.startsWith('en-ca')) {
+    return 0; // Sunday
+  }
+  return 1; // Monday
+};
+
+const locales = {
+  'en-US': enUS,
+};
+
+const localizer = dateFnsLocalizer({
+  format,
+  parse,
+  startOfWeek: (date: any, options: any) => startOfWeek(date, { ...options, weekStartsOn: getWeekStartsOn() }),
+  getDay,
+  locales,
+});
 
 const DnDCalendar = withDragAndDrop<TimeEntry>(Calendar as any);
 
 function App() {
-  const [events, setEvents] = useState<TimeEntry[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
+  const {
+    events,
+    showWeekends,
+    isInitialized,
+    addEvent,
+    updateEvent,
+    deleteEvent,
+    moveEvent,
+    updateShowWeekends,
+    eventsByDate,
+  } = useCalendarEvents();
+
+  const {
+    projects,
+    addProject,
+    updateProject,
+    deleteProject,
+    projectMap,
+  } = useProjects();
+
   const [view, setView] = useState<View>(Views.WEEK);
   const [date, setDate] = useState(new Date());
-  const [showWeekends, setShowWeekends] = useState(true);
-  const [isInitialized, setIsInitialized] = useState(false);
   
-  const [modalState, setModalState] = useState<ModalState>({ isOpen: false, mode: 'create' });
+  const [modalState, setModalState] = useState<ModalState>({ isOpen: false });
   const [isProjectsModalOpen, setIsProjectsModalOpen] = useState(false);
+  const [viewInitialized, setViewInitialized] = useState(false);
 
-  useEffect(() => {
-    storage.get().then(setEvents);
-    storage.getProjects().then(setProjects);
-    storage.getSettings().then(s => {
-      setShowWeekends(s.showWeekends);
-      setIsInitialized(true);
-    });
-  }, []);
+  if (isInitialized && !viewInitialized) {
+    setView(showWeekends ? Views.WEEK : Views.WORK_WEEK);
+    setViewInitialized(true);
+  }
 
   const handleShowWeekendsChange = useCallback((checked: boolean) => {
-    setShowWeekends(checked);
-    if (isInitialized) {
-      storage.setSettings({ showWeekends: checked });
-    }
+    updateShowWeekends(checked);
     setView((prevView) => {
       if (!checked && prevView === Views.WEEK) return Views.WORK_WEEK;
       if (checked && prevView === Views.WORK_WEEK) return Views.WEEK;
       return prevView;
     });
-  }, [isInitialized]);
-
-  const handleEventsChange = useCallback((newEvents: TimeEntry[]) => {
-    setEvents(newEvents);
-    storage.set(newEvents);
-  }, []);
-
-  const onEventResize = useCallback(
-    ({ event, start, end }: any) => {
-      if (view === Views.MONTH) return;
-      const nextEvents = events.map((existingEvent) => {
-        return existingEvent.id === event.id
-          ? { ...existingEvent, start: new Date(start), end: new Date(end) }
-          : existingEvent;
-      });
-      handleEventsChange(nextEvents);
-    },
-    [events, handleEventsChange, view]
-  );
-
-  const onEventDrop = useCallback(
-    ({ event, start, end }: any) => {
-      if (view === Views.MONTH) return;
-      const nextEvents = events.map((existingEvent) => {
-        return existingEvent.id === event.id
-          ? { ...existingEvent, start: new Date(start), end: new Date(end) }
-          : existingEvent;
-      });
-      handleEventsChange(nextEvents);
-    },
-    [events, handleEventsChange, view]
-  );
+  }, [updateShowWeekends]);
 
   const handleSelectSlot = useCallback(
     (slotInfo: SlotInfo) => {
@@ -106,60 +112,23 @@ function App() {
     [view]
   );
 
-  const handleAddProject = useCallback((title: string): Project => {
-    const newColor = COLORS[projects.length % COLORS.length];
-    const newProj: Project = {
-      id: uuidv4(),
-      title,
-      color: newColor
-    };
-    const newProjects = [...projects, newProj];
-    setProjects(newProjects);
-    storage.setProjects(newProjects);
-    return newProj;
-  }, [projects]);
-
   const handleModalSave = useCallback((data: Partial<TimeEntry>) => {
+    if (!modalState.isOpen) return;
+
     if (modalState.mode === 'create') {
-      const newColor = COLORS[events.length % COLORS.length];
-      const newEvent: TimeEntry = {
-        id: uuidv4(),
-        title: data.title || '',
-        start: data.start!,
-        end: data.end!,
-        projectId: data.projectId,
-        description: data.description,
-        color: newColor // Legacy fallback
-      };
-      handleEventsChange([...events, newEvent]);
-    } else if (modalState.event) {
-      const nextEvents = events.map(e =>
-        e.id === modalState.event!.id ? { ...e, ...data } : e
-      );
-      handleEventsChange(nextEvents);
+      addEvent(data);
+    } else if (modalState.mode === 'edit') {
+      updateEvent(modalState.event.id, data);
     }
-    setModalState({ isOpen: false, mode: 'create' });
-  }, [events, handleEventsChange, modalState]);
+    setModalState({ isOpen: false });
+  }, [modalState, addEvent, updateEvent]);
 
   const handleModalDelete = useCallback(() => {
-    if (modalState.mode === 'edit' && modalState.event) {
-      const nextEvents = events.filter((e) => e.id !== modalState.event!.id);
-      handleEventsChange(nextEvents);
+    if (modalState.isOpen && modalState.mode === 'edit') {
+      deleteEvent(modalState.event.id);
     }
-    setModalState({ isOpen: false, mode: 'create' });
-  }, [events, handleEventsChange, modalState]);
-
-  const handleUpdateProject = useCallback((updatedProj: Project) => {
-    const newProjects = projects.map(p => p.id === updatedProj.id ? updatedProj : p);
-    setProjects(newProjects);
-    storage.setProjects(newProjects);
-  }, [projects]);
-
-  const handleDeleteProject = useCallback((projectId: string) => {
-    const newProjects = projects.filter(p => p.id !== projectId);
-    setProjects(newProjects);
-    storage.setProjects(newProjects);
-  }, [projects]);
+    setModalState({ isOpen: false });
+  }, [modalState, deleteEvent]);
 
   const { defaultDate, scrollToTime } = useMemo(
     () => ({
@@ -184,7 +153,7 @@ function App() {
   const eventPropGetter = useCallback(
     (event: TimeEntry) => {
       if (!event) return {};
-      const proj = projects.find(p => p.id === event.projectId);
+      const proj = projectMap.get(event.projectId || '');
       const color = proj ? proj.color : (event.color || 'var(--event-color-4)');
       return {
         style: {
@@ -193,7 +162,7 @@ function App() {
         },
       };
     },
-    [projects]
+    [projectMap]
   );
 
   const slotPropGetter = useCallback(
@@ -227,11 +196,11 @@ function App() {
       loc.format(start, 'HH:mm', culture) + ' – ' + loc.format(end, 'HH:mm', culture),
   }), []);
 
-  // Stable component definitions to prevent unmounting inside useMemo
+  // Stable component definitions
   const CustomEvent = useCallback(({ event }: EventProps<TimeEntry>) => {
     if (!event) return null;
     const duration = formatDuration(event.start, event.end);
-    const proj = projects.find(p => p.id === event.projectId);
+    const proj = projectMap.get(event.projectId || '');
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', position: 'relative' }}>
         {proj && (
@@ -260,11 +229,13 @@ function App() {
         )}
       </div>
     );
-  }, [projects]);
+  }, [projectMap]);
 
   const CustomHeader = useCallback(({ date: d, label }: HeaderProps) => {
     if (!d) return <div>{label}</div>;
-    const dayEvents = events.filter((e) => e && e.start && moment(e.start).isSame(d, 'day'));
+    const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+    const dateKey = format(d, 'yyyy-MM-dd');
+    const dayEvents = eventsByDate.get(dateKey) || [];
     const totalMs = dayEvents.reduce((acc, e) => {
       if (!e.start || !e.end) return acc;
       return acc + (e.end.getTime() - e.start.getTime());
@@ -273,17 +244,18 @@ function App() {
     const durationStr = totalMs > 0 ? formatMs(totalMs) : '';
 
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '4px 0' }}>
+      <div className={isWeekend ? 'is-weekend-header' : ''} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '4px 0' }}>
         <div>{label}</div>
         {durationStr && <div style={{ fontSize: '0.85em', color: 'var(--text-secondary)', fontWeight: 'normal', marginTop: '4px' }}>{durationStr}</div>}
       </div>
     );
-  }, [events]);
+  }, [eventsByDate]);
 
   const CustomDateHeader = useCallback(({ label, date: d }: DateHeaderProps) => {
     if (!d) return <span>{label}</span>;
     const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-    const dayEvents = events.filter((e) => e && e.start && moment(e.start).isSame(d, 'day'));
+    const dateKey = format(d, 'yyyy-MM-dd');
+    const dayEvents = eventsByDate.get(dateKey) || [];
     const totalMs = dayEvents.reduce((acc, e) => {
       if (!e.start || !e.end) return acc;
       return acc + (e.end.getTime() - e.start.getTime());
@@ -302,7 +274,7 @@ function App() {
         <div className="month-events-wrapper">
           {dayEvents.map(e => {
             if (!e) return null;
-            const proj = projects.find(p => p.id === e.projectId);
+            const proj = projectMap.get(e.projectId || '');
             return (
               <div
                 key={e.id}
@@ -323,7 +295,7 @@ function App() {
         </div>
       </div>
     );
-  }, [events, projects]);
+  }, [eventsByDate, projectMap]);
 
   const components = useMemo(() => ({
     toolbar: (props: any) => <CustomToolbar {...props} showWeekends={showWeekends} setShowWeekends={handleShowWeekendsChange} onManageProjects={() => setIsProjectsModalOpen(true)} />,
@@ -333,6 +305,14 @@ function App() {
       dateHeader: CustomDateHeader
     }
   }), [showWeekends, handleShowWeekendsChange, CustomEvent, CustomHeader, CustomDateHeader]);
+
+  if (!isInitialized) {
+    return (
+      <div style={{ display: 'flex', height: '100vh', justifyContent: 'center', alignItems: 'center', color: 'var(--text-secondary)' }}>
+        Loading Time Tracker...
+      </div>
+    );
+  }
 
   return (
     <div className="app-container">
@@ -346,8 +326,8 @@ function App() {
           defaultDate={defaultDate}
           events={events}
           localizer={localizer}
-          onEventDrop={onEventDrop}
-          onEventResize={onEventResize}
+          onEventDrop={moveEvent}
+          onEventResize={moveEvent}
           onSelectEvent={handleSelectEvent}
           onSelectSlot={handleSelectSlot}
           onDrillDown={(clickedDate: Date) => {
@@ -369,23 +349,23 @@ function App() {
       </div>
       <EventModal
         isOpen={modalState.isOpen}
-        mode={modalState.mode}
-        initialData={modalState.mode === 'edit' ? modalState.event : undefined}
-        slot={modalState.mode === 'create' ? modalState.slot : undefined}
+        mode={modalState.isOpen ? modalState.mode : 'create'}
+        initialData={modalState.isOpen && modalState.mode === 'edit' ? modalState.event : undefined}
+        slot={modalState.isOpen && modalState.mode === 'create' ? modalState.slot : undefined}
         projects={projects}
-        onClose={() => setModalState({ isOpen: false, mode: 'create' })}
+        onClose={() => setModalState({ isOpen: false })}
         onSave={handleModalSave}
         onDelete={handleModalDelete}
-        onAddProject={handleAddProject}
+        onAddProject={addProject}
       />
       <ProjectsModal
         isOpen={isProjectsModalOpen}
         projects={projects}
         events={events}
         onClose={() => setIsProjectsModalOpen(false)}
-        onSaveProject={handleUpdateProject}
-        onDeleteProject={handleDeleteProject}
-        onAddProject={handleAddProject}
+        onSaveProject={updateProject}
+        onDeleteProject={deleteProject}
+        onAddProject={addProject}
       />
     </div>
   );

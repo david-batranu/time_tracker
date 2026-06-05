@@ -1,0 +1,20 @@
+:root {
+  --primary-color: #f77f00;
+  --primary-hover: #ea580c;
+  --bg-color: #fcfcfc;
+  --text-primary: #1e293b;
+  --text-secondary: #64748b;
+  --border-color: #e2e8f0;
+  --sidebar-bg: #ffffff;
+  --today-bg: #f8fafc;
+  --indicator-color: #ef4444;
+  --btn-bg: #ffffff;
+  --btn-hover-bg: #f1f5f9;
+  --workday-bg: #f9fafb;
+
+  --event-color-1: #fce7f3;
+  --event-color-2: #dcfce7;
+  --event-color-3: #fef08a;
+  --event-color-4: #e0e7ff;
+  --event-color-5: #ffedd5;
+}

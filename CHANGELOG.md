@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-06-06
+
+### Added
+- Comprehensive test coverage for all modules (expanded test suite from 20 to 55 tests)
+- Storage module tests covering `getQuotaUsage`, isolated settings, 100KB quota limit rejections, legacy key fallbacks, chunk parse failure recovery, and `localStorage` environment fallbacks
+- Hook tests covering `moveEvent` and `updateShowWeekends` callbacks
+- Unit tests for new components: `ErrorBoundary`, `ProjectsModal`, and `CustomToolbar`
+- Component tests updates for `ProjectItem` (cancel reset, CSS variable color resolution) and `EventModal` (empty/invalid date validations, delete/cancel actions, dynamic project addition)
+- Integration tests for the main `App` component checking loading states and projects modal toggles
+
 ## [1.3.1] - 2026-06-05
 
 ### Fixed
