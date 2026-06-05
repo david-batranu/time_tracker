@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-06-05
+
+### Fixed
+- Fixed extension popup collapsing into a small square by enforcing dimensions
+
 ## [1.3.0] - 2026-06-05
 
 ### Added
