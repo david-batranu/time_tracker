@@ -4,11 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-06-05
+
 ### Added
 - Project creation functionality to the manage projects modal
 
 ### Changed
 - Remove calendar week labeling, relax app dimensions, and standardize CSS formatting
+
+### Fixed
+- Fixed visual bug where overlapping events would disappear from the calendar view
 
 ## [1.2.0] - 2026-05-14
 

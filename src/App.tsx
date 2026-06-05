@@ -853,6 +853,7 @@ function App() {
           onNavigate={(newDate) => setDate(newDate)}
           view={view}
           onView={(newView) => setView(newView)}
+          dayLayoutAlgorithm="no-overlap"
           defaultDate={defaultDate}
           events={events}
           localizer={localizer}
