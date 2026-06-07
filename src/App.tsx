@@ -208,16 +208,16 @@ function App() {
     const duration = formatDuration(event.start, event.end);
     const proj = projectMap.get(event.projectId || '');
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', position: 'relative' }}>
-        {proj && (
-          <div style={{ position: 'absolute', top: 0, right: 0 }}>
-            <span className="project-pill" style={{ fontSize: '9px', padding: '1px 5px', opacity: 0.9, backgroundColor: 'rgba(255,255,255,0.3)' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '4px' }}>
+          <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>{event.title || 'Untitled'}</div>
+          {proj && (
+            <span className="project-pill" style={{ fontSize: '9px', padding: '1px 4px', opacity: 0.9, backgroundColor: 'rgba(255,255,255,0.3)', whiteSpace: 'nowrap', flexShrink: 0 }}>
               {proj.title}
             </span>
-          </div>
-        )}
-        <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', paddingRight: proj ? '45px' : '0' }}>{event.title || 'Untitled'}</div>
-        <div style={{ fontSize: '0.85em', opacity: 0.8 }}>{duration}</div>
+          )}
+        </div>
+        <div style={{ fontSize: '0.85em', opacity: 0.8, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{duration}</div>
         {event.description && (
           <div style={{
             fontSize: '0.75em',
@@ -334,7 +334,6 @@ function App() {
           onNavigate={(newDate: Date) => setDate(newDate)}
           view={view}
           onView={(newView: View) => setView(newView)}
-          dayLayoutAlgorithm="no-overlap"
           defaultDate={defaultDate}
           events={events}
           localizer={localizer}
