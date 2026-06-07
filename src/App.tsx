@@ -95,7 +95,7 @@ function App() {
         setView(Views.WEEK);
         return;
       }
-      setModalState({ isOpen: true, mode: 'create', slot: { start: slotInfo.start, end: slotInfo.end } });
+      setModalState({ isOpen: true, mode: 'create', slot: { start: slotInfo.start, end: slotInfo.end }, selectedDate: slotInfo.start });
     },
     [view]
   );
@@ -107,7 +107,7 @@ function App() {
         setDate(event.start);
         setView(Views.WEEK);
       }
-      setModalState({ isOpen: true, mode: 'edit', event });
+      setModalState({ isOpen: true, mode: 'edit', event, selectedDate: event.start });
     },
     [view]
   );
@@ -352,6 +352,7 @@ function App() {
         mode={modalState.isOpen ? modalState.mode : 'create'}
         initialData={modalState.isOpen && modalState.mode === 'edit' ? modalState.event : undefined}
         slot={modalState.isOpen && modalState.mode === 'create' ? modalState.slot : undefined}
+        selectedDate={modalState.isOpen ? modalState.selectedDate : undefined}
         projects={projects}
         onClose={() => setModalState({ isOpen: false })}
         onSave={handleModalSave}

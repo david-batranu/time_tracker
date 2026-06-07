@@ -15,9 +15,9 @@ export interface TimeEntry {
 }
 
 export type ModalState =
-  | { isOpen: false; mode?: never; event?: never; slot?: never }
-  | { isOpen: true; mode: 'create'; slot: { start: Date; end: Date }; event?: never }
-  | { isOpen: true; mode: 'edit'; event: TimeEntry; slot?: never };
+  | { isOpen: false; mode?: never; event?: never; slot?: never; selectedDate?: never }
+  | { isOpen: true; mode: 'create'; slot: { start: Date; end: Date }; selectedDate: Date; event?: never }
+  | { isOpen: true; mode: 'edit'; event: TimeEntry; selectedDate: Date; slot?: never };
 
 export interface Settings {
   showWeekends: boolean;

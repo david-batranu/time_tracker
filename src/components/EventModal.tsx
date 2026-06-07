@@ -6,6 +6,7 @@ interface EventModalProps {
   mode: 'create' | 'edit';
   initialData?: TimeEntry;
   slot?: { start: Date; end: Date };
+  selectedDate?: Date;
   projects: Project[];
   onClose: () => void;
   onSave: (data: Partial<TimeEntry>) => void;
@@ -18,6 +19,7 @@ export const EventModal = ({
   mode,
   initialData,
   slot,
+  selectedDate,
   projects,
   onClose,
   onSave,
@@ -31,36 +33,14 @@ export const EventModal = ({
   const [newProjectTitle, setNewProjectTitle] = useState('');
   const [error, setError] = useState<string | null>(null);
   
-  // We need to keep track of full dates to support multi-day events
-  const [startDateStr, setStartDateStr] = useState('');
+  // Track only times since dates are fixed to selectedDate
   const [startTimeStr, setStartTimeStr] = useState('');
-  const [endDateStr, setEndDateStr] = useState('');
   const [endTimeStr, setEndTimeStr] = useState('');
 
   const formatTimeForInput = (date: Date) => {
     if (!date) return '';
     const pad = (n: number) => n.toString().padStart(2, '0');
     return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
-  };
-
-  const formatDateForInput = (date: Date) => {
-    if (!date) return '';
-    const pad = (n: number) => n.toString().padStart(2, '0');
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-  };
-
-  const parseLocalISO = (dateStr: string, timeStr: string): Date => {
-    const parts = dateStr.split('-').map(Number);
-    const year = parts[0] || 0;
-    const month = parts[1] || 1;
-    const day = parts[2] || 1;
-    
-    const timeParts = (timeStr || '00:00').split(':').map(Number);
-    const hours = timeParts[0] || 0;
-    const minutes = timeParts[1] || 0;
-    
-    // month is 0-indexed in JS Date constructor
-    return new Date(year, month - 1, day, hours, minutes, 0, 0);
   };
 
   useEffect(() => {
@@ -72,46 +52,71 @@ export const EventModal = ({
       setNewProjectTitle('');
       setError(null);
       
-      let startD = new Date();
-      let endD = new Date();
+      let baseDate = new Date();
       
       if (initialData?.start) {
-        startD = new Date(initialData.start);
+        baseDate = new Date(initialData.start);
       } else if (slot?.start) {
-        startD = new Date(slot.start);
+        baseDate = new Date(slot.start);
+      } else if (selectedDate) {
+        baseDate = new Date(selectedDate);
       }
       
+      setStartTimeStr(formatTimeForInput(baseDate));
+      
+      let endBaseDate = new Date(baseDate);
       if (initialData?.end) {
-        endD = new Date(initialData.end);
+        endBaseDate = new Date(initialData.end);
       } else if (slot?.end) {
-        endD = new Date(slot.end);
+        endBaseDate = new Date(slot.end);
       } else {
         // Default end to +1 hour if not specified
-        endD = new Date(startD);
-        endD.setHours(endD.getHours() + 1);
+        endBaseDate.setHours(endBaseDate.getHours() + 1);
       }
-
-      setStartDateStr(formatDateForInput(startD));
-      setStartTimeStr(formatTimeForInput(startD));
       
-      setEndDateStr(formatDateForInput(endD));
-      setEndTimeStr(formatTimeForInput(endD));
+      setEndTimeStr(formatTimeForInput(endBaseDate));
     }
-  }, [isOpen, initialData, slot]);
+  }, [isOpen, initialData, slot, selectedDate]);
 
   if (!isOpen) return null;
 
   const handleSave = () => {
     setError(null);
 
-    if (!startDateStr || !endDateStr) {
-      setError("Please fill in start and end dates.");
+    if (!startTimeStr || !endTimeStr) {
+      setError("Please fill in start and end times.");
       return;
     }
 
-    // Reconstruct start and end dates from strings as local times
-    const startDate = parseLocalISO(startDateStr, startTimeStr);
-    const endDate = parseLocalISO(endDateStr, endTimeStr);
+    let startDate: Date;
+    let endDate: Date;
+
+    if (selectedDate) {
+      // If we have a selectedDate, we use it as the base
+      startDate = new Date(selectedDate);
+      const [h, m] = startTimeStr.split(':').map(Number);
+      startDate.setHours(h ?? 0, m ?? 0, 0, 0);
+
+      // For the end date, if initialData/slot had a different day, keep it?
+      // But the prompt says "they all happen in the selected day".
+      // Let's assume if it's multi-day, we might want to keep the original day if provided,
+      // but the prompt says "the start and end should only be time based, they all happen in the selected day".
+      // This implies even for multi-day events, if we are editing them in this modal, we are fixing them to today.
+      // However, if it's a "create" mode, it's definitely on the selected day.
+      
+      // Let's stick to the selected day for both start and end.
+      endDate = new Date(selectedDate);
+      const [eh, em] = endTimeStr.split(':').map(Number);
+      endDate.setHours(eh ?? 0, em ?? 0, 0, 0);
+    } else {
+      // Fallback if no selectedDate is provided (shouldn't happen with our changes)
+      startDate = new Date();
+      const [h, m] = startTimeStr.split(':').map(Number);
+      startDate.setHours(h ?? 0, m ?? 0, 0, 0);
+      endDate = new Date(startDate);
+      const [eh, em] = endTimeStr.split(':').map(Number);
+      endDate.setHours(eh ?? 0, em ?? 0, 0, 0);
+    }
 
     if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
       setError("Invalid date/time format.");
@@ -178,21 +183,12 @@ export const EventModal = ({
         
         <div style={{ display: 'flex', gap: '16px' }}>
           <div className="form-group" style={{ flex: 1 }}>
-            <label htmlFor="event-start-date">Start Date & Time</label>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <input id="event-start-date" type="date" value={startDateStr} onChange={e => setStartDateStr(e.target.value)} style={{ flex: 2 }} />
-              <input id="event-start-time" type="time" value={startTimeStr} onChange={e => setStartTimeStr(e.target.value)} style={{ flex: 1 }} aria-label="Start Time" />
-            </div>
+            <label htmlFor="event-start-time">Start</label>
+            <input id="event-start-time" type="time" value={startTimeStr} onChange={e => setStartTimeStr(e.target.value)} style={{ width: '100%' }} aria-label="Start" />
           </div>
-        </div>
-        
-        <div style={{ display: 'flex', gap: '16px' }}>
           <div className="form-group" style={{ flex: 1 }}>
-            <label htmlFor="event-end-date">End Date & Time</label>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <input id="event-end-date" type="date" value={endDateStr} onChange={e => setEndDateStr(e.target.value)} style={{ flex: 2 }} />
-              <input id="event-end-time" type="time" value={endTimeStr} onChange={e => setEndTimeStr(e.target.value)} style={{ flex: 1 }} aria-label="End Time" />
-            </div>
+            <label htmlFor="event-end-time">End</label>
+            <input id="event-end-time" type="time" value={endTimeStr} onChange={e => setEndTimeStr(e.target.value)} style={{ width: '100%' }} aria-label="End" />
           </div>
         </div>
 
