@@ -4,6 +4,94 @@ import LZString from 'lz-string';
 const CHUNK_SIZE_CHARS = 3000; // 3000 UTF-16 chars = 6000 bytes, safely under 8192 bytes limit
 
 // Generic debouncer
+function encodeTime(start: Date, end: Date): string {
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  const yy = start.getFullYear() % 100;
+  const MM = start.getMonth() + 1;
+  const dd = start.getDate();
+  const HH = start.getHours();
+  const mm = start.getMinutes();
+  const eHH = end.getHours();
+  const emm = end.getMinutes();
+  return `${pad(yy)}${pad(MM)}${pad(dd)}${pad(HH)}${pad(mm)}${pad(eHH)}${pad(emm)}`;
+}
+
+function decodeTime(tStr: string): { start: string; end: string } {
+  if (!tStr || tStr.length !== 14) return { start: new Date().toISOString(), end: new Date().toISOString() };
+  const yy = parseInt(tStr.slice(0, 2), 10);
+  const year = yy + 2000;
+  const MM = parseInt(tStr.slice(2, 4), 10) - 1;
+  const dd = parseInt(tStr.slice(4, 6), 10);
+  const HH = parseInt(tStr.slice(6, 8), 10);
+  const mm = parseInt(tStr.slice(8, 10), 10);
+  const eHH = parseInt(tStr.slice(10, 12), 10);
+  const emm = parseInt(tStr.slice(12, 14), 10);
+
+  const start = new Date(year, MM, dd, HH, mm);
+  let end = new Date(year, MM, dd, eHH, emm);
+  // Handle cross-midnight events
+  if (end < start) {
+    end = new Date(year, MM, dd + 1, eHH, emm);
+  }
+
+  return { start: start.toISOString(), end: end.toISOString() };
+}
+
+// Convert a TimeEntry into minified payload
+function compressEntry(e: TimeEntry): any {
+  const minified: any = {
+    i: e.id,
+    l: e.title,
+    t: encodeTime(e.start instanceof Date ? e.start : new Date(e.start), e.end instanceof Date ? e.end : new Date(e.end))
+  };
+  if (e.projectId) minified.p = e.projectId;
+  if (e.description) minified.d = e.description;
+  return minified;
+}
+
+// Convert minified payload back to TimeEntry JSON format (before Date parsing)
+function decompressEntry(m: any): any {
+  if (!m) return m;
+  if (m.start) return m; // It's already decompressed or legacy
+  const times = decodeTime(m.t);
+  return {
+    id: m.i?.toString(),
+    title: m.l || '',
+    start: times.start,
+    end: times.end,
+    projectId: m.p?.toString(),
+    description: m.d
+  };
+}
+
+// Project minification
+function compressProject(p: Project): any {
+  return { i: p.id, l: p.title, c: p.color };
+}
+
+function decompressProject(m: any): any {
+  if (!m) return m;
+  if (m.title) return m; // legacy
+  return { id: m.i?.toString(), title: m.l || '', color: m.c || '#e0e7ff' };
+}
+
+// UUID to Integer Migration Map
+const idMigrationMap = new Map<string, string>();
+function migrateId(oldId: string | undefined, currentMax: { val: number }): string | undefined {
+  if (!oldId) return undefined;
+  // If it's already an integer string, update currentMax and return it
+  if (/^\d+$/.test(oldId)) {
+    currentMax.val = Math.max(currentMax.val, parseInt(oldId, 10));
+    return oldId;
+  }
+  // Otherwise it's a UUID or string, assign a new integer ID
+  if (!idMigrationMap.has(oldId)) {
+    currentMax.val += 1;
+    idMigrationMap.set(oldId, currentMax.val.toString());
+  }
+  return idMigrationMap.get(oldId);
+}
+
 function debounce<T extends (...args: any[]) => Promise<void>>(
   func: T,
   wait: number
@@ -235,19 +323,38 @@ export const storage = {
       winnerData = syncData;
     }
 
-    return winnerData.map((e: any) => ({
-      ...e,
-      start: new Date(e.start),
-      end: new Date(e.end),
-    }));
+    let maxId = { val: 0 };
+    // Pass 1: find highest integer id to continue incrementing safely
+    winnerData.forEach((e: any) => {
+      const dec = decompressEntry(e);
+      if (/^\d+$/.test(dec.id)) maxId.val = Math.max(maxId.val, parseInt(dec.id, 10));
+    });
+
+    const finalEvents = winnerData.map((e: any) => {
+      const dec = decompressEntry(e);
+      const newId = migrateId(dec.id, maxId);
+      if (newId) dec.id = newId;
+      
+      const newProjId = migrateId(dec.projectId, { val: 0 }); 
+      if (newProjId) dec.projectId = newProjId;
+
+      return {
+        ...dec,
+        start: new Date(dec.start),
+        end: new Date(dec.end)
+      } as TimeEntry;
+    });
+    
+    // Auto-save migration back if anything migrated
+    if (finalEvents.length > 0 && finalEvents.some((e, idx) => e.id !== decompressEntry(winnerData[idx])?.id)) {
+        debouncedSyncSetEvents(finalEvents.map(compressEntry), Date.now());
+    }
+
+    return finalEvents;
   },
   
   set: async (entries: TimeEntry[]): Promise<void> => {
-    const serialized = entries.map(e => ({
-      ...e,
-      start: e.start instanceof Date ? e.start.toISOString() : e.start,
-      end: e.end instanceof Date ? e.end.toISOString() : e.end,
-    }));
+    const serialized = entries.map(compressEntry);
     const updated = Date.now();
 
     if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
@@ -318,21 +425,39 @@ export const storage = {
       winnerData = syncData;
     }
 
-    return winnerData;
+    let maxId = { val: 0 };
+    winnerData.forEach((e: any) => {
+      const dec = decompressProject(e);
+      if (/^\d+$/.test(dec.id)) maxId.val = Math.max(maxId.val, parseInt(dec.id, 10));
+    });
+
+    const finalProjects = winnerData.map((e: any) => {
+      const dec = decompressProject(e);
+      const newId = migrateId(dec.id, maxId);
+      if (newId) dec.id = newId;
+      return dec as Project;
+    });
+
+    if (finalProjects.length > 0 && finalProjects.some((p, idx) => p.id !== decompressProject(winnerData[idx])?.id)) {
+      debouncedSyncSetProjects(finalProjects.map(compressProject), Date.now());
+    }
+
+    return finalProjects;
   },
 
   setProjects: async (projects: Project[]): Promise<void> => {
+    const serialized = projects.map(compressProject);
     const updated = Date.now();
     if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
       await new Promise<void>((resolve, reject) => {
-        chrome.storage.local.set({ projects_cache: projects, projects_updated: updated }, () => {
+        chrome.storage.local.set({ projects_cache: serialized, projects_updated: updated }, () => {
           if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
           else resolve();
         });
       });
-      debouncedSyncSetProjects(projects, updated);
+      debouncedSyncSetProjects(serialized, updated);
     } else {
-      localStorage.setItem('projects', JSON.stringify(projects));
+      localStorage.setItem('projects', JSON.stringify(serialized));
       localStorage.setItem('projects_updated', updated.toString());
     }
   },

@@ -9,7 +9,6 @@ export interface TimeEntry {
   title: string;
   start: Date;
   end: Date;
-  color?: string;
   projectId?: string;
   description?: string;
 }

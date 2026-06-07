@@ -12,9 +12,10 @@ export function useProjects() {
   }, []);
 
   const addProject = useCallback((title: string): Project => {
+    const nextId = (projects.reduce((max, p) => Math.max(max, parseInt(p.id) || 0), 0) + 1).toString();
     const newColor = COLORS[projects.length % COLORS.length] || '#e0e7ff';
     const newProj: Project = {
-      id: crypto.randomUUID(),
+      id: nextId,
       title,
       color: newColor
     };

@@ -154,7 +154,7 @@ function App() {
     (event: TimeEntry) => {
       if (!event) return {};
       const proj = projectMap.get(event.projectId || '');
-      const color = proj ? proj.color : (event.color || 'var(--event-color-4)');
+      const color = proj ? proj.color : 'var(--event-color-4)';
       return {
         style: {
           backgroundColor: color,
@@ -279,7 +279,7 @@ function App() {
               <div
                 key={e.id}
                 className="month-event-tag"
-                style={{ backgroundColor: proj?.color || e.color || 'var(--event-color-4)' }}
+                style={{ backgroundColor: proj?.color || 'var(--event-color-4)' }}
               >
                 {formatDuration(e.start, e.end)}
                 <div className="event-tooltip">

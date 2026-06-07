@@ -141,7 +141,7 @@ describe('Storage Management', () => {
 
     const loaded = await storage.get();
     expect(loaded.length).toBe(1);
-    expect(loaded[0]?.id).toBe('legacy-1');
+    expect(loaded[0]?.id).toBe('1');
     expect(loaded[0]?.title).toBe('Legacy Task');
     expect(loaded[0]?.start).toBeInstanceOf(Date);
   });
@@ -227,7 +227,7 @@ describe('Storage Management', () => {
       await storage.setProjects(mockProjects);
       await vi.runAllTimersAsync();
       const loaded = await storage.getProjects();
-      expect(loaded).toEqual(mockProjects);
+      expect(loaded).toEqual([{ id: '1', title: 'Local Proj', color: '#fff' }]);
     });
 
     it('should calculate quota usage from localStorage sizes', async () => {

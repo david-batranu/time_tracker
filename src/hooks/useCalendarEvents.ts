@@ -46,15 +46,14 @@ export function useCalendarEvents() {
 
   const addEvent = useCallback((data: Partial<TimeEntry>) => {
     handleEventsChange((prev) => {
-      const newColor = COLORS[prev.length % COLORS.length];
+      const nextId = (prev.reduce((max, e) => Math.max(max, parseInt(e.id) || 0), 0) + 1).toString();
       const newEvent: TimeEntry = {
-        id: crypto.randomUUID(),
+        id: nextId,
         title: data.title || '',
         start: data.start!,
         end: data.end!,
         projectId: data.projectId,
-        description: data.description,
-        color: newColor
+        description: data.description
       };
       return [...prev, newEvent];
     });
