@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-06-07
+
+### Fixed
+- Reverted core app dimensions back to `100vw`/`100vh` to fix a severe bug causing the extension popup window to collapse to minimal height on launch.
+- Improved flexbox handling for overlapping calendar events so that titles elegantly truncate instead of squishing text when horizontal space is limited.
+- Added explicit boundary limits to `react-big-calendar` grid to fix vertical scrolling cut-offs.
+
 ## [1.4.0] - 2026-06-07
 
 ### Added
