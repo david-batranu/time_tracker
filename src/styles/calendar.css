@@ -1,6 +1,6 @@
-/* React Big Calendar Overrides */
 .rbc-calendar {
   flex: 1;
+  min-height: 0;
 }
 
 .rbc-header {
