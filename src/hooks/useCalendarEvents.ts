@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { TimeEntry, COLORS } from '../types';
+import { TimeEntry } from '../types';
 import { storage } from '../storage';
 import { format } from 'date-fns';
 

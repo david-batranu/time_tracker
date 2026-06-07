@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-06-07
+
+### Added
+- Automated storage offloading engine that seamlessly retains full historical data locally while only syncing recent records to bypass the Chrome Sync 100KB quota limit.
+- Comprehensive Settings Hub containing Project Management, Preferences (weekend toggles), and Data Management inside a single modal.
+- Export and Import functionality enabling manual full data backups and local data restoration.
+- Sync Quota warning indicators within the toolbar that proactively inform the user when storage limits are near.
+
+### Changed
+- Drastically minified event payload format in storage using simplified keys and compressed timestamps.
+- Transparent background migration mapping heavy project and event UUIDs to highly compressed sequential integers.
+- Removed standalone Projects Modal in favor of the unified Settings Hub.
+
+### Fixed
+- Resolved duplicate React key warnings caused by overlapping ID namespace logic during migration.
+
 ## [1.3.2] - 2026-06-06
 
 ### Added

@@ -3,6 +3,12 @@ import LZString from 'lz-string';
 
 const CHUNK_SIZE_CHARS = 3000; // 3000 UTF-16 chars = 6000 bytes, safely under 8192 bytes limit
 
+interface SyncMetadata {
+  lastUpdated: number;
+  chunkCount: number;
+  minSyncDate?: string;
+}
+
 // Generic debouncer
 function encodeTime(start: Date, end: Date): string {
   const pad = (n: number) => n.toString().padStart(2, '0');
@@ -145,7 +151,7 @@ async function syncSetCompressed(key: string, data: any[], lastUpdated: number):
     });
     const sortedYears = Array.from(years).sort((a, b) => a - b);
     if (sortedYears.length > 1) {
-       const oldestYear = sortedYears[0];
+       const oldestYear = sortedYears[0]!;
        finalData = data.filter(e => {
           if (!e.t) return true;
           return parseInt(e.t.slice(0, 2), 10) + 2000 > oldestYear;
@@ -171,7 +177,7 @@ async function syncSetCompressed(key: string, data: any[], lastUpdated: number):
     chrome.storage.sync.get([`${key}_meta`], (result) => {
       if (chrome.runtime.lastError) return reject(chrome.runtime.lastError);
       
-      const prevMeta = result[`${key}_meta`];
+      const prevMeta = result[`${key}_meta`] as SyncMetadata | undefined;
       const prevCount = prevMeta?.chunkCount || 0;
       
       const keysToRemove: string[] = [];
@@ -206,7 +212,7 @@ async function syncGetCompressed(key: string): Promise<{ data: any, lastUpdated:
     chrome.storage.sync.get([`${key}_meta`], (result) => {
       if (chrome.runtime.lastError) return reject(chrome.runtime.lastError);
 
-      const meta = result[`${key}_meta`];
+      const meta = result[`${key}_meta`] as SyncMetadata | undefined;
       if (!meta) {
         resolve(null);
         return;
@@ -260,7 +266,7 @@ async function readLegacyEvents(): Promise<any[] | null> {
         chrome.storage.sync.get(chunkKeys, (chunksResult) => {
           const allEntries: any[] = [];
           for (let i = 0; i < chunkCount; i++) {
-            const chunkStr = chunksResult[`te_chunk_${i}`];
+            const chunkStr = chunksResult[`te_chunk_${i}`] as string;
             if (chunkStr) {
               try {
                 allEntries.push(...JSON.parse(chunkStr));

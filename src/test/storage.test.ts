@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { storage } from '../storage';
 import { TimeEntry } from '../types';
 import { resetMockStorage } from './setup';
-import LZString from 'lz-string';
+
 
 describe('Storage Management', () => {
   beforeEach(() => {
@@ -59,16 +59,17 @@ describe('Storage Management', () => {
     // Verify metadata has minSyncDate and chunks exist
     return new Promise<void>((resolve) => {
       chrome.storage.sync.get(['events_meta'], async (result) => {
-        expect(result.events_meta).toBeDefined();
-        expect(result.events_meta.chunkCount).toBeGreaterThan(0);
-        expect(result.events_meta.minSyncDate).toBe('2025-01-01T00:00:00.000Z');
+        const meta = result.events_meta as { chunkCount: number, minSyncDate?: string, lastUpdated: number };
+        expect(meta).toBeDefined();
+        expect(meta.chunkCount).toBeGreaterThan(0);
+        expect(meta.minSyncDate).toBe('2025-01-01T00:00:00.000Z');
         
         // Let's modify local cache to simulate a sync pull where local has 2024 and sync has 2025
         // Actually, storage.get() right now will resolve conflict because localUpdated is the same as syncUpdated
         // Let's force syncUpdated to be higher
         await new Promise<void>((r) => {
            chrome.storage.sync.set({
-              events_meta: { ...result.events_meta, lastUpdated: Date.now() + 1000 }
+              events_meta: { ...meta, lastUpdated: Date.now() + 1000 }
            }, r);
         });
         
