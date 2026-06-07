@@ -34,8 +34,8 @@ export function useCalendarEvents() {
   // Flush debounced writes on beforeunload
   useEffect(() => {
     const handleBeforeUnload = () => {
-      if (storage.set && typeof storage.set.flush === 'function') {
-        storage.set.flush();
+      if (typeof storage.flush === 'function') {
+        storage.flush();
       }
     };
     window.addEventListener('beforeunload', handleBeforeUnload);

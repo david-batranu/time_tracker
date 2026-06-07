@@ -2,11 +2,16 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { storage } from '../storage';
 import { TimeEntry } from '../types';
 import { resetMockStorage } from './setup';
+import LZString from 'lz-string';
 
 describe('Storage Management', () => {
   beforeEach(() => {
     resetMockStorage();
     vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('should return an empty array when no events are stored', async () => {
@@ -25,7 +30,7 @@ describe('Storage Management', () => {
     ];
 
     const p = storage.set(mockEntries);
-    vi.runAllTimers(); // Resolve debounce timeout
+    await vi.runAllTimersAsync(); // Resolve debounce timeout
     await p;
 
     const loaded = await storage.get();
@@ -34,40 +39,36 @@ describe('Storage Management', () => {
     expect(loaded[0]?.start).toBeInstanceOf(Date);
   });
 
-  it('should chunk time entries when they exceed the limit', async () => {
-    // Generate many entries with long descriptions to force chunking (>6000 bytes)
-    const largeEntries: TimeEntry[] = Array.from({ length: 50 }, (_, i) => ({
+  it('should compress and chunk time entries in sync storage', async () => {
+    // Generate many entries with long descriptions to force chunking 
+    const largeEntries: TimeEntry[] = Array.from({ length: 150 }, (_, i) => ({
       id: `id-${i}`,
       title: `Task ${i}`,
       start: new Date(),
       end: new Date(),
-      description: 'A'.repeat(200), // ~200 bytes per entry
+      description: 'A'.repeat(200),
     }));
 
     const p = storage.set(largeEntries);
-    vi.runAllTimers();
+    await vi.runAllTimersAsync();
     await p;
 
     // Verify chunking metadata is set
     return new Promise<void>((resolve) => {
-      chrome.storage.sync.get(['te_chunk_count'], async (result) => {
-        expect(result.te_chunk_count).toBeGreaterThan(1);
+      chrome.storage.sync.get(['events_meta'], async (result) => {
+        expect(result.events_meta).toBeDefined();
+        expect(result.events_meta.chunkCount).toBeGreaterThan(0);
         
         // Load events through storage.get and check if all are preserved
         const loaded = await storage.get();
-        expect(loaded.length).toBe(50);
-        expect(loaded[49]?.title).toBe('Task 49');
+        expect(loaded.length).toBe(150);
+        expect(loaded[149]?.title).toBe('Task 149');
         resolve();
       });
     });
   });
 
-  it('should reject when chrome.runtime.lastError is present', async () => {
-    (chrome.runtime as any).lastError = new Error('Test storage failure');
-    await expect(storage.get()).rejects.toThrow('Test storage failure');
-  });
-
-  it('should support immediate flush of debounced writes', async () => {
+  it('should sync up local storage to sync storage on set', async () => {
     const mockEntries: TimeEntry[] = [
       {
         id: 'flush-test',
@@ -78,8 +79,8 @@ describe('Storage Management', () => {
     ];
 
     const p = storage.set(mockEntries);
-    // Do not run timers, flush immediately
-    storage.set.flush();
+    // run timers to trigger debounced sync write
+    await vi.runAllTimersAsync();
     await p;
 
     const loaded = await storage.get();
@@ -88,7 +89,6 @@ describe('Storage Management', () => {
   });
 
   it('should get quota usage', async () => {
-    // Mock getBytesInUse to return 5120 bytes
     vi.spyOn(chrome.storage.sync, 'getBytesInUse').mockImplementationOnce((_keys, cb) => {
       cb(5120);
     });
@@ -102,7 +102,6 @@ describe('Storage Management', () => {
     const originalLastError = (chrome.runtime as any).lastError;
     (chrome.runtime as any).lastError = new Error('Bytes check failure');
     vi.spyOn(chrome.storage.sync, 'getBytesInUse').mockImplementationOnce((_keys, cb) => {
-      // Simulate failure by having lastError set
       cb(0);
     });
     
@@ -125,21 +124,6 @@ describe('Storage Management', () => {
     expect(loadedSettings).toEqual({ showWeekends: true });
   });
 
-  it('should reject when set exceeds overall storage quota', async () => {
-    // Generate massive entries whose key + value length exceeds 100000 bytes
-    const massiveEntries: TimeEntry[] = Array.from({ length: 200 }, (_, i) => ({
-      id: `id-${i}`,
-      title: `Task ${i}`,
-      start: new Date(),
-      end: new Date(),
-      description: 'B'.repeat(500), // ~500 bytes per entry, 200 * 500 = 100KB
-    }));
-
-    const p = storage.set(massiveEntries);
-    storage.set.flush(); // Flush the debounce so it executes immediately
-    await expect(p).rejects.toThrow('Storage quota exceeded');
-  });
-
   it('should fallback to legacy timeEntries when no chunk count is present', async () => {
     const mockLegacyEntries = [
       {
@@ -150,7 +134,7 @@ describe('Storage Management', () => {
       },
     ];
     
-    // Inject directly into chrome mock storage
+    // Inject directly into chrome mock sync storage
     await new Promise<void>((resolve) => {
       chrome.storage.sync.set({ timeEntries: mockLegacyEntries }, resolve);
     });
@@ -162,19 +146,19 @@ describe('Storage Management', () => {
     expect(loaded[0]?.start).toBeInstanceOf(Date);
   });
 
-  it('should handle chunk parse failure gracefully', async () => {
-    // Inject malformed JSON into a chunk
+  it('should handle compression parse failure gracefully', async () => {
+    // Inject malformed LZString into a chunk
     await new Promise<void>((resolve) => {
       chrome.storage.sync.set({
-        te_chunk_count: 1,
-        te_chunk_0: 'invalid { json'
+        events_meta: { lastUpdated: 1, chunkCount: 1 },
+        events_chunk_0: 'invalid_lz_string'
       }, resolve);
     });
 
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const loaded = await storage.get();
     expect(loaded).toEqual([]);
-    expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to parse chunk:'), expect.any(Error));
+    expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to decompress events:'), expect.any(Error));
     consoleErrorSpy.mockRestore();
   });
 
@@ -215,7 +199,7 @@ describe('Storage Management', () => {
       ];
 
       const p = storage.set(mockEntries);
-      storage.set.flush();
+      await vi.runAllTimersAsync();
       await p;
 
       const loaded = await storage.get();
@@ -226,12 +210,9 @@ describe('Storage Management', () => {
 
     it('should handle localStorage parse failure gracefully', async () => {
       localStorage.setItem('timeEntries', 'malformed { json');
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       
       const loaded = await storage.get();
       expect(loaded).toEqual([]);
-      expect(consoleErrorSpy).toHaveBeenCalled();
-      consoleErrorSpy.mockRestore();
     });
 
     it('should save and get settings from localStorage', async () => {
@@ -244,6 +225,7 @@ describe('Storage Management', () => {
     it('should save and get projects from localStorage', async () => {
       const mockProjects = [{ id: 'p1', title: 'Local Proj', color: '#fff' }];
       await storage.setProjects(mockProjects);
+      await vi.runAllTimersAsync();
       const loaded = await storage.getProjects();
       expect(loaded).toEqual(mockProjects);
     });

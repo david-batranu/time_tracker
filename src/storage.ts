@@ -1,43 +1,26 @@
 import { TimeEntry, Project, Settings } from './types';
+import LZString from 'lz-string';
 
+const CHUNK_SIZE_CHARS = 3000; // 3000 UTF-16 chars = 6000 bytes, safely under 8192 bytes limit
+
+// Generic debouncer
 function debounce<T extends (...args: any[]) => Promise<void>>(
   func: T,
   wait: number
-): ((...args: Parameters<T>) => Promise<void>) & { flush: () => void } {
+): ((...args: Parameters<T>) => void) & { flush: () => void } {
   let timeout: ReturnType<typeof setTimeout> | null = null;
   let latestArgs: Parameters<T> | null = null;
-  let currentResolve: (() => void) | null = null;
-  let currentReject: ((err: any) => void) | null = null;
 
-  const debounced = (...args: Parameters<T>): Promise<void> => {
+  const debounced = (...args: Parameters<T>) => {
     latestArgs = args;
     if (timeout) clearTimeout(timeout);
-    
-    // Resolve the superseded promise to avoid leaks/hangs
-    if (currentResolve) {
-      currentResolve();
-    }
-
-    return new Promise((resolve, reject) => {
-      currentResolve = resolve;
-      currentReject = reject;
-
-      timeout = setTimeout(() => {
-        const resolveRef = currentResolve;
-        const rejectRef = currentReject;
-        currentResolve = null;
-        currentReject = null;
-
-        func(...args)
-          .then(() => {
-            if (resolveRef) resolveRef();
-          })
-          .catch((err) => {
-            if (rejectRef) rejectRef(err);
-          });
+    timeout = setTimeout(() => {
+      timeout = null;
+      if (latestArgs) {
+        func(...latestArgs).catch(err => console.error('Debounced func error:', err));
         latestArgs = null;
-      }, wait);
-    });
+      }
+    }, wait);
   };
 
   debounced.flush = () => {
@@ -46,211 +29,320 @@ function debounce<T extends (...args: any[]) => Promise<void>>(
       timeout = null;
     }
     if (latestArgs) {
-      const resolveRef = currentResolve;
-      const rejectRef = currentReject;
-      currentResolve = null;
-      currentReject = null;
-
-      func(...latestArgs)
-        .then(() => {
-          if (resolveRef) resolveRef();
-        })
-        .catch((err) => {
-          if (rejectRef) rejectRef(err);
-        });
+      func(...latestArgs).catch(err => console.error('Flush func error:', err));
       latestArgs = null;
-    } else if (currentResolve) {
-      currentResolve();
-      currentResolve = null;
-      currentReject = null;
     }
   };
 
   return debounced;
 }
 
-const CHUNK_SIZE_LIMIT = 6000; // Safe threshold under 8,192 bytes
-const CHUNK_PREFIX = 'te_chunk_';
+// Helper to write compressed and chunked data to sync storage
+async function syncSetCompressed(key: string, data: any, lastUpdated: number): Promise<void> {
+  if (typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.sync) return;
 
-const performSet = async (entries: TimeEntry[]): Promise<void> => {
-  const serializedEntries = entries.map(e => ({
-    ...e,
-    start: e.start instanceof Date ? e.start.toISOString() : e.start,
-    end: e.end instanceof Date ? e.end.toISOString() : e.end,
-  }));
+  const jsonStr = JSON.stringify(data);
+  const compressedStr = LZString.compressToUTF16(jsonStr);
+  
+  // Split into chunks of CHUNK_SIZE_CHARS
+  const chunks = compressedStr.match(new RegExp(`.{1,${CHUNK_SIZE_CHARS}}`, 'g')) || [];
+  
+  const dataToWrite: Record<string, any> = {
+    [`${key}_meta`]: { lastUpdated, chunkCount: chunks.length }
+  };
+  
+  chunks.forEach((chunk, i) => {
+    dataToWrite[`${key}_chunk_${i}`] = chunk;
+  });
 
-  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
-    // Determine chunking
-    const chunks: string[] = [];
-    let currentChunk: any[] = [];
-    for (const entry of serializedEntries) {
-      const tempChunk = [...currentChunk, entry];
-      if (JSON.stringify(tempChunk).length > CHUNK_SIZE_LIMIT) {
-        if (currentChunk.length === 0) {
-          chunks.push(JSON.stringify([entry]));
-        } else {
-          chunks.push(JSON.stringify(currentChunk));
-          currentChunk = [entry];
-        }
-      } else {
-        currentChunk.push(entry);
+  return new Promise((resolve, reject) => {
+    chrome.storage.sync.get([`${key}_meta`], (result) => {
+      if (chrome.runtime.lastError) return reject(chrome.runtime.lastError);
+      
+      const prevMeta = result[`${key}_meta`];
+      const prevCount = prevMeta?.chunkCount || 0;
+      
+      const keysToRemove: string[] = [];
+      for (let i = chunks.length; i < prevCount; i++) {
+        keysToRemove.push(`${key}_chunk_${i}`);
       }
-    }
-    if (currentChunk.length > 0) {
-      chunks.push(JSON.stringify(currentChunk));
-    }
+      
+      const proceed = () => {
+        chrome.storage.sync.set(dataToWrite, () => {
+          if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
+          else resolve();
+        });
+      };
 
-    // Check overall quota limit (100KB)
-    let totalBytes = 0;
-    const dataToWrite: Record<string, any> = {};
-    
-    // Chunk keys
-    chunks.forEach((chunkStr, i) => {
-      const key = `${CHUNK_PREFIX}${i}`;
-      dataToWrite[key] = chunkStr;
-      totalBytes += key.length + chunkStr.length;
+      if (keysToRemove.length > 0) {
+        chrome.storage.sync.remove(keysToRemove, () => {
+          if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
+          else proceed();
+        });
+      } else {
+        proceed();
+      }
     });
-    
-    dataToWrite['te_chunk_count'] = chunks.length;
-    totalBytes += 'te_chunk_count'.length + String(chunks.length).length;
+  });
+}
 
-    // Check if the total size exceeds sync quota (102,400 bytes)
-    if (totalBytes > 100000) { // Keep a buffer of 2.4KB
-      throw new Error(`Storage quota exceeded. Please clean up old events.`);
-    }
+// Helper to read compressed and chunked data from sync storage
+async function syncGetCompressed(key: string): Promise<{ data: any, lastUpdated: number } | null> {
+  if (typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.sync) return null;
 
-    return new Promise<void>((resolve, reject) => {
-      chrome.storage.sync.get(['te_chunk_count'], (result: any) => {
-        if (chrome.runtime.lastError) {
-          reject(chrome.runtime.lastError);
+  return new Promise((resolve, reject) => {
+    chrome.storage.sync.get([`${key}_meta`], (result) => {
+      if (chrome.runtime.lastError) return reject(chrome.runtime.lastError);
+
+      const meta = result[`${key}_meta`];
+      if (!meta) {
+        resolve(null);
+        return;
+      }
+      
+      const chunkKeys = Array.from({ length: meta.chunkCount }, (_, i) => `${key}_chunk_${i}`);
+      chrome.storage.sync.get(chunkKeys, (chunksResult) => {
+        if (chrome.runtime.lastError) return reject(chrome.runtime.lastError);
+
+        let compressedStr = '';
+        for (let i = 0; i < meta.chunkCount; i++) {
+          compressedStr += chunksResult[`${key}_chunk_${i}`] || '';
+        }
+        
+        if (!compressedStr) {
+          resolve(null);
           return;
         }
-        const prevCount = result.te_chunk_count || 0;
-        
-        // Remove keys that are no longer needed
-        const keysToRemove: string[] = [];
-        for (let i = chunks.length; i < prevCount; i++) {
-          keysToRemove.push(`${CHUNK_PREFIX}${i}`);
-        }
-        
-        // Clean up legacy key as well
-        keysToRemove.push('timeEntries');
 
-        const proceedWithSet = () => {
-          chrome.storage.sync.set(dataToWrite, () => {
-            if (chrome.runtime.lastError) {
-              reject(chrome.runtime.lastError);
-            } else {
-              resolve();
-            }
-          });
-        };
-
-        if (keysToRemove.length > 0) {
-          chrome.storage.sync.remove(keysToRemove, () => {
-            if (chrome.runtime.lastError) {
-              reject(chrome.runtime.lastError);
-            } else {
-              proceedWithSet();
-            }
-          });
-        } else {
-          proceedWithSet();
+        try {
+          const jsonStr = LZString.decompressFromUTF16(compressedStr);
+          if (!jsonStr) { resolve(null); return; }
+          const data = JSON.parse(jsonStr);
+          resolve({ data, lastUpdated: meta.lastUpdated });
+        } catch (e) {
+          console.error(`Failed to decompress ${key}:`, e);
+          resolve(null);
         }
       });
     });
-  } else {
-    localStorage.setItem('timeEntries', JSON.stringify(serializedEntries));
-    return Promise.resolve();
-  }
-};
+  });
+}
 
+// --- Specific debounced sync setters ---
+const debouncedSyncSetEvents = debounce(async (data: any[], lastUpdated: number) => {
+  await syncSetCompressed('events', data, lastUpdated);
+}, 2000);
+
+const debouncedSyncSetProjects = debounce(async (data: any[], lastUpdated: number) => {
+  await syncSetCompressed('projects', data, lastUpdated);
+}, 2000);
+
+// --- Migration / Legacy reading ---
+async function readLegacyEvents(): Promise<any[] | null> {
+  if (typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.sync) return null;
+  return new Promise((resolve) => {
+    chrome.storage.sync.get(['te_chunk_count', 'timeEntries'], (result) => {
+      const chunkCount = result.te_chunk_count as number | undefined;
+      if (chunkCount !== undefined) {
+        const chunkKeys = Array.from({ length: chunkCount }, (_, i) => `te_chunk_${i}`);
+        chrome.storage.sync.get(chunkKeys, (chunksResult) => {
+          const allEntries: any[] = [];
+          for (let i = 0; i < chunkCount; i++) {
+            const chunkStr = chunksResult[`te_chunk_${i}`];
+            if (chunkStr) {
+              try {
+                allEntries.push(...JSON.parse(chunkStr));
+              } catch (e) {}
+            }
+          }
+          resolve(allEntries);
+        });
+      } else if (result.timeEntries && Array.isArray(result.timeEntries)) {
+        resolve(result.timeEntries);
+      } else {
+        resolve(null);
+      }
+    });
+  });
+}
+
+async function readLegacyProjects(): Promise<any[] | null> {
+  if (typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.sync) return null;
+  return new Promise((resolve) => {
+    chrome.storage.sync.get(['projects'], (result) => {
+      resolve(result.projects && Array.isArray(result.projects) ? result.projects : null);
+    });
+  });
+}
+
+// --- Main API ---
 export const storage = {
   get: async (): Promise<TimeEntry[]> => {
-    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
-      return new Promise((resolve, reject) => {
-        chrome.storage.sync.get(['te_chunk_count', 'timeEntries'], (result: any) => {
-          if (chrome.runtime.lastError) {
-            console.error('Storage get error:', chrome.runtime.lastError);
-            reject(chrome.runtime.lastError);
-            return;
-          }
-
-          const chunkCount = result.te_chunk_count as number | undefined;
-          
-          if (chunkCount !== undefined) {
-            // Read all chunks
-            const chunkKeys = Array.from({ length: chunkCount }, (_, i) => `${CHUNK_PREFIX}${i}`) as string[];
-            chrome.storage.sync.get(chunkKeys, (chunksResult: any) => {
-              if (chrome.runtime.lastError) {
-                console.error('Storage get chunks error:', chrome.runtime.lastError);
-                reject(chrome.runtime.lastError);
-                return;
-              }
-              
-              const allEntries: any[] = [];
-              for (let i = 0; i < (chunkCount as number); i++) {
-                const chunkStr = chunksResult[`${CHUNK_PREFIX}${i}`];
-                if (chunkStr) {
-                  try {
-                    allEntries.push(...JSON.parse(chunkStr));
-                  } catch (e) {
-                    console.error('Failed to parse chunk:', e);
-                  }
-                }
-              }
-              
-              const entries = allEntries.map((e: any) => ({
-                ...e,
-                start: new Date(e.start),
-                end: new Date(e.end),
-              }));
-              resolve(entries);
-            });
-          } else if (result.timeEntries && Array.isArray(result.timeEntries)) {
-            // Legacy format fallback
-            const entries = result.timeEntries.map((e: any) => ({
-              ...e,
-              start: new Date(e.start),
-              end: new Date(e.end),
-            }));
-            resolve(entries);
-          } else {
-            resolve([]);
-          }
-        });
-      });
+    let localData: any[] | null = null;
+    let localUpdated = 0;
+    
+    // 1. Read from fast local cache
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+      const res = await new Promise<any>(resolve => chrome.storage.local.get(['events_cache', 'events_updated'], resolve));
+      if (res.events_cache) {
+        localData = res.events_cache;
+        localUpdated = res.events_updated || 0;
+      }
     } else {
       const stored = localStorage.getItem('timeEntries');
       if (stored) {
         try {
-          return JSON.parse(stored).map((e: any) => ({
-            ...e,
-            start: new Date(e.start),
-            end: new Date(e.end),
-          }));
-        } catch (e) {
-          console.error('Failed to parse localStorage entries:', e);
-          return [];
+          localData = JSON.parse(stored);
+          localUpdated = parseInt(localStorage.getItem('timeEntries_updated') || '0', 10);
+        } catch (e) {}
+      }
+    }
+
+    // 2. Read from sync storage
+    let syncData: any[] | null = null;
+    let syncUpdated = 0;
+    
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
+      const syncResult = await syncGetCompressed('events');
+      if (syncResult) {
+        syncData = syncResult.data;
+        syncUpdated = syncResult.lastUpdated;
+      } else {
+        // Fallback to old format
+        const legacy = await readLegacyEvents();
+        if (legacy) {
+          syncData = legacy;
+          syncUpdated = 1; // Give it a low timestamp so local overrides if newer, otherwise adopts it
         }
       }
-      return [];
     }
+
+    // 3. Resolve conflict (highest timestamp wins)
+    let winnerData: any[] = [];
+    if (syncUpdated > localUpdated && syncData) {
+      winnerData = syncData;
+      // Mirror down to local
+      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        chrome.storage.local.set({ events_cache: winnerData, events_updated: syncUpdated });
+      }
+    } else if (localData) {
+      winnerData = localData;
+      // Sync up if sync is behind
+      if (localUpdated > syncUpdated && typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
+        debouncedSyncSetEvents(winnerData, localUpdated);
+      }
+    } else if (syncData) {
+      winnerData = syncData;
+    }
+
+    return winnerData.map((e: any) => ({
+      ...e,
+      start: new Date(e.start),
+      end: new Date(e.end),
+    }));
   },
   
-  // Debounced version of set to prevent rate limits and race conditions
-  set: debounce(performSet, 500),
+  set: async (entries: TimeEntry[]): Promise<void> => {
+    const serialized = entries.map(e => ({
+      ...e,
+      start: e.start instanceof Date ? e.start.toISOString() : e.start,
+      end: e.end instanceof Date ? e.end.toISOString() : e.end,
+    }));
+    const updated = Date.now();
+
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+      // Immediate reliable write
+      await new Promise<void>((resolve, reject) => {
+        chrome.storage.local.set({ events_cache: serialized, events_updated: updated }, () => {
+          if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
+          else resolve();
+        });
+      });
+      // Background sync write
+      debouncedSyncSetEvents(serialized, updated);
+    } else {
+      localStorage.setItem('timeEntries', JSON.stringify(serialized));
+      localStorage.setItem('timeEntries_updated', updated.toString());
+    }
+  },
+
+  getProjects: async (): Promise<Project[]> => {
+    let localData: any[] | null = null;
+    let localUpdated = 0;
+    
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+      const res = await new Promise<any>(resolve => chrome.storage.local.get(['projects_cache', 'projects_updated'], resolve));
+      if (res.projects_cache) {
+        localData = res.projects_cache;
+        localUpdated = res.projects_updated || 0;
+      }
+    } else {
+      const stored = localStorage.getItem('projects');
+      if (stored) {
+        try {
+          localData = JSON.parse(stored);
+          localUpdated = parseInt(localStorage.getItem('projects_updated') || '0', 10);
+        } catch (e) {}
+      }
+    }
+
+    let syncData: any[] | null = null;
+    let syncUpdated = 0;
+    
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
+      const syncResult = await syncGetCompressed('projects');
+      if (syncResult) {
+        syncData = syncResult.data;
+        syncUpdated = syncResult.lastUpdated;
+      } else {
+        const legacy = await readLegacyProjects();
+        if (legacy) {
+          syncData = legacy;
+          syncUpdated = 1;
+        }
+      }
+    }
+
+    let winnerData: any[] = [];
+    if (syncUpdated > localUpdated && syncData) {
+      winnerData = syncData;
+      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        chrome.storage.local.set({ projects_cache: winnerData, projects_updated: syncUpdated });
+      }
+    } else if (localData) {
+      winnerData = localData;
+      if (localUpdated > syncUpdated && typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
+        debouncedSyncSetProjects(winnerData, localUpdated);
+      }
+    } else if (syncData) {
+      winnerData = syncData;
+    }
+
+    return winnerData;
+  },
+
+  setProjects: async (projects: Project[]): Promise<void> => {
+    const updated = Date.now();
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+      await new Promise<void>((resolve, reject) => {
+        chrome.storage.local.set({ projects_cache: projects, projects_updated: updated }, () => {
+          if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
+          else resolve();
+        });
+      });
+      debouncedSyncSetProjects(projects, updated);
+    } else {
+      localStorage.setItem('projects', JSON.stringify(projects));
+      localStorage.setItem('projects_updated', updated.toString());
+    }
+  },
 
   getSettings: async (): Promise<Settings> => {
+    // Settings are small, standard sync storage is fine
     if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
-      return new Promise((resolve, reject) => {
+      return new Promise((resolve) => {
         chrome.storage.sync.get(['settings'], (result) => {
-          if (chrome.runtime.lastError) {
-            console.error('Storage getSettings error:', chrome.runtime.lastError);
-            reject(chrome.runtime.lastError);
-          } else {
-            resolve((result.settings as Settings) || { showWeekends: true });
-          }
+          resolve((result.settings as Settings) || { showWeekends: true });
         });
       });
     } else {
@@ -269,39 +361,6 @@ export const storage = {
       });
     } else {
       localStorage.setItem('settings', JSON.stringify(settings));
-      return Promise.resolve();
-    }
-  },
-
-  getProjects: async (): Promise<Project[]> => {
-    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
-      return new Promise((resolve, reject) => {
-        chrome.storage.sync.get(['projects'], (result) => {
-          if (chrome.runtime.lastError) {
-            console.error('Storage getProjects error:', chrome.runtime.lastError);
-            reject(chrome.runtime.lastError);
-          } else {
-            resolve((result.projects as Project[]) || []);
-          }
-        });
-      });
-    } else {
-      const stored = localStorage.getItem('projects');
-      return stored ? JSON.parse(stored) : [];
-    }
-  },
-
-  setProjects: async (projects: Project[]): Promise<void> => {
-    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
-      return new Promise((resolve, reject) => {
-        chrome.storage.sync.set({ projects }, () => {
-          if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
-          else resolve();
-        });
-      });
-    } else {
-      localStorage.setItem('projects', JSON.stringify(projects));
-      return Promise.resolve();
     }
   },
 
@@ -336,5 +395,10 @@ export const storage = {
         percentage: (bytesUsed / limit) * 100,
       };
     }
+  },
+
+  flush: (): void => {
+    debouncedSyncSetEvents.flush();
+    debouncedSyncSetProjects.flush();
   }
 };

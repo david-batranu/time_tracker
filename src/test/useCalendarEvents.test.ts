@@ -84,7 +84,7 @@ describe('useCalendarEvents Hook', () => {
       expect(result.current.isInitialized).toBe(true);
     });
 
-    const setSpy = vi.spyOn(storage.set, 'flush');
+    const setSpy = vi.spyOn(storage, 'flush');
 
     // Trigger beforeunload event
     window.dispatchEvent(new Event('beforeunload'));
