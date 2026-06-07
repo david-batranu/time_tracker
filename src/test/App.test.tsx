@@ -23,32 +23,32 @@ describe('App Component Integration', () => {
     // After storage get resolves, shows main calendar toolbar
     await waitFor(() => {
       expect(screen.queryByText('Loading Time Tracker...')).not.toBeInTheDocument();
-      expect(screen.getByText('Projects')).toBeInTheDocument();
+      expect(screen.getByTitle('Settings')).toBeInTheDocument();
     });
   });
 
-  it('should open and close the projects modal', async () => {
+  it('should open and close the settings modal', async () => {
     render(<App />);
 
     await waitFor(() => {
       expect(screen.queryByText('Loading Time Tracker...')).not.toBeInTheDocument();
     });
 
-    // Projects Modal is not in the document initially
-    expect(screen.queryByText('Manage Projects')).not.toBeInTheDocument();
+    // Settings Modal is not in the document initially
+    expect(screen.queryByText('+ Add New Project')).not.toBeInTheDocument();
 
-    // Click "Projects" button in the toolbar
-    const projectsBtn = screen.getByText('Projects');
-    fireEvent.click(projectsBtn);
+    // Click Settings button in the toolbar
+    const settingsBtn = screen.getByTitle('Settings');
+    fireEvent.click(settingsBtn);
 
     // Modal is now open
-    expect(screen.getByText('Manage Projects')).toBeInTheDocument();
+    expect(screen.getByText('+ Add New Project')).toBeInTheDocument();
 
     // Click Close (×) button
     const closeBtn = screen.getByText('×');
     fireEvent.click(closeBtn);
 
     // Modal is closed
-    expect(screen.queryByText('Manage Projects')).not.toBeInTheDocument();
+    expect(screen.queryByText('+ Add New Project')).not.toBeInTheDocument();
   });
 });

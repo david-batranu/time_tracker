@@ -75,9 +75,11 @@ function decompressProject(m: any): any {
   return { id: m.i?.toString(), title: m.l || '', color: m.c || '#e0e7ff' };
 }
 
-// UUID to Integer Migration Map
-const idMigrationMap = new Map<string, string>();
-function migrateId(oldId: string | undefined, currentMax: { val: number }): string | undefined {
+// UUID to Integer Migration Maps
+const eventIdMigrationMap = new Map<string, string>();
+const projectIdMigrationMap = new Map<string, string>();
+
+function migrateId(oldId: string | undefined, currentMax: { val: number }, map: Map<string, string>): string | undefined {
   if (!oldId) return undefined;
   // If it's already an integer string, update currentMax and return it
   if (/^\d+$/.test(oldId)) {
@@ -85,11 +87,11 @@ function migrateId(oldId: string | undefined, currentMax: { val: number }): stri
     return oldId;
   }
   // Otherwise it's a UUID or string, assign a new integer ID
-  if (!idMigrationMap.has(oldId)) {
+  if (!map.has(oldId)) {
     currentMax.val += 1;
-    idMigrationMap.set(oldId, currentMax.val.toString());
+    map.set(oldId, currentMax.val.toString());
   }
-  return idMigrationMap.get(oldId);
+  return map.get(oldId);
 }
 
 function debounce<T extends (...args: any[]) => Promise<void>>(
@@ -126,17 +128,39 @@ function debounce<T extends (...args: any[]) => Promise<void>>(
 }
 
 // Helper to write compressed and chunked data to sync storage
-async function syncSetCompressed(key: string, data: any, lastUpdated: number): Promise<void> {
+async function syncSetCompressed(key: string, data: any[], lastUpdated: number): Promise<void> {
   if (typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.sync) return;
 
-  const jsonStr = JSON.stringify(data);
-  const compressedStr = LZString.compressToUTF16(jsonStr);
+  let finalData = data;
+  let minSyncDate: string | undefined = undefined;
+
+  let jsonStr = JSON.stringify(finalData);
+  let compressedStr = LZString.compressToUTF16(jsonStr);
   
+  // If payload is nearing limit (compressed length > 40000 UTF-16 chars ~ 80KB)
+  if (key === 'events' && compressedStr.length > 40000) {
+    let years = new Set<number>();
+    data.forEach(e => {
+       if (e.t) years.add(parseInt(e.t.slice(0, 2), 10) + 2000);
+    });
+    const sortedYears = Array.from(years).sort((a, b) => a - b);
+    if (sortedYears.length > 1) {
+       const oldestYear = sortedYears[0];
+       finalData = data.filter(e => {
+          if (!e.t) return true;
+          return parseInt(e.t.slice(0, 2), 10) + 2000 > oldestYear;
+       });
+       minSyncDate = `${oldestYear + 1}-01-01T00:00:00.000Z`;
+       jsonStr = JSON.stringify(finalData);
+       compressedStr = LZString.compressToUTF16(jsonStr);
+    }
+  }
+
   // Split into chunks of CHUNK_SIZE_CHARS
   const chunks = compressedStr.match(new RegExp(`.{1,${CHUNK_SIZE_CHARS}}`, 'g')) || [];
   
   const dataToWrite: Record<string, any> = {
-    [`${key}_meta`]: { lastUpdated, chunkCount: chunks.length }
+    [`${key}_meta`]: { lastUpdated, chunkCount: chunks.length, minSyncDate }
   };
   
   chunks.forEach((chunk, i) => {
@@ -175,7 +199,7 @@ async function syncSetCompressed(key: string, data: any, lastUpdated: number): P
 }
 
 // Helper to read compressed and chunked data from sync storage
-async function syncGetCompressed(key: string): Promise<{ data: any, lastUpdated: number } | null> {
+async function syncGetCompressed(key: string): Promise<{ data: any, lastUpdated: number, minSyncDate?: string } | null> {
   if (typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.sync) return null;
 
   return new Promise((resolve, reject) => {
@@ -206,7 +230,7 @@ async function syncGetCompressed(key: string): Promise<{ data: any, lastUpdated:
           const jsonStr = LZString.decompressFromUTF16(compressedStr);
           if (!jsonStr) { resolve(null); return; }
           const data = JSON.parse(jsonStr);
-          resolve({ data, lastUpdated: meta.lastUpdated });
+          resolve({ data, lastUpdated: meta.lastUpdated, minSyncDate: meta.minSyncDate });
         } catch (e) {
           console.error(`Failed to decompress ${key}:`, e);
           resolve(null);
@@ -289,12 +313,14 @@ export const storage = {
     // 2. Read from sync storage
     let syncData: any[] | null = null;
     let syncUpdated = 0;
+    let syncMinSyncDate: string | undefined = undefined;
     
     if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
       const syncResult = await syncGetCompressed('events');
       if (syncResult) {
         syncData = syncResult.data;
         syncUpdated = syncResult.lastUpdated;
+        syncMinSyncDate = syncResult.minSyncDate;
       } else {
         // Fallback to old format
         const legacy = await readLegacyEvents();
@@ -308,7 +334,15 @@ export const storage = {
     // 3. Resolve conflict (highest timestamp wins)
     let winnerData: any[] = [];
     if (syncUpdated > localUpdated && syncData) {
-      winnerData = syncData;
+      if (syncMinSyncDate && localData) {
+         const preservedLocal = localData.filter(e => {
+            const dec = decompressEntry(e);
+            return new Date(dec.start) < new Date(syncMinSyncDate!);
+         });
+         winnerData = [...preservedLocal, ...syncData];
+      } else {
+         winnerData = syncData;
+      }
       // Mirror down to local
       if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
         chrome.storage.local.set({ events_cache: winnerData, events_updated: syncUpdated });
@@ -332,11 +366,21 @@ export const storage = {
 
     const finalEvents = winnerData.map((e: any) => {
       const dec = decompressEntry(e);
-      const newId = migrateId(dec.id, maxId);
+      const newId = migrateId(dec.id, maxId, eventIdMigrationMap);
       if (newId) dec.id = newId;
       
-      const newProjId = migrateId(dec.projectId, { val: 0 }); 
-      if (newProjId) dec.projectId = newProjId;
+      // If projectId is still a UUID, we shouldn't use the event maxId.
+      // We will just try to pull from projectIdMigrationMap, or if not found, we assign a fallback.
+      if (dec.projectId && !/^\d+$/.test(dec.projectId)) {
+        if (projectIdMigrationMap.has(dec.projectId)) {
+          dec.projectId = projectIdMigrationMap.get(dec.projectId);
+        } else {
+          // Fallback for deleted projects or if projects haven't loaded yet
+          const fallback = Math.floor(Math.random() * 10000) + 10000;
+          projectIdMigrationMap.set(dec.projectId, fallback.toString());
+          dec.projectId = fallback.toString();
+        }
+      }
 
       return {
         ...dec,
@@ -431,10 +475,18 @@ export const storage = {
       if (/^\d+$/.test(dec.id)) maxId.val = Math.max(maxId.val, parseInt(dec.id, 10));
     });
 
+    const emittedIds = new Set<string>();
     const finalProjects = winnerData.map((e: any) => {
       const dec = decompressProject(e);
-      const newId = migrateId(dec.id, maxId);
-      if (newId) dec.id = newId;
+      let newId = migrateId(dec.id, maxId, projectIdMigrationMap);
+      if (newId) {
+        if (emittedIds.has(newId)) {
+          maxId.val += 1;
+          newId = maxId.val.toString();
+        }
+        emittedIds.add(newId);
+        dec.id = newId;
+      }
       return dec as Project;
     });
 
@@ -525,5 +577,67 @@ export const storage = {
   flush: (): void => {
     debouncedSyncSetEvents.flush();
     debouncedSyncSetProjects.flush();
+  },
+
+  exportData: async (): Promise<void> => {
+    const events = await storage.get();
+    const projects = await storage.getProjects();
+    const settings = await storage.getSettings();
+    const data = { events, projects, settings, version: 1 };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `time_tracker_backup_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  },
+
+  importData: async (file: File): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const contents = e.target?.result as string;
+          const data = JSON.parse(contents);
+          
+          if (data.settings) await storage.setSettings(data.settings);
+          
+          if (data.projects && Array.isArray(data.projects)) {
+             const existing = await storage.getProjects();
+             const merged = [...existing];
+             data.projects.forEach((p: Project) => {
+                if (!merged.find(ep => ep.id === p.id)) {
+                   merged.push(p);
+                }
+             });
+             await storage.setProjects(merged);
+          }
+          
+          if (data.events && Array.isArray(data.events)) {
+             const existing = await storage.get();
+             const merged = [...existing];
+             data.events.forEach((ev: any) => {
+                if (!merged.find(ee => ee.id === ev.id)) {
+                   merged.push({
+                      ...ev,
+                      start: new Date(ev.start),
+                      end: new Date(ev.end)
+                   });
+                }
+             });
+             await storage.set(merged);
+          }
+          
+          resolve();
+        } catch (err) {
+          reject(err);
+        }
+      };
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsText(file);
+    });
   }
 };

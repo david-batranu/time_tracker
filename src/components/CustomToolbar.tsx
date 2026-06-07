@@ -1,12 +1,11 @@
 import { ToolbarProps, Views } from 'react-big-calendar';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Settings, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
 import { TimeEntry } from '../types';
 
 export interface CustomToolbarProps extends ToolbarProps<TimeEntry> {
-  showWeekends: boolean;
-  setShowWeekends: (show: boolean) => void;
-  onManageProjects: () => void;
+  onManageSettings: () => void;
+  quotaUsage: { percentage: number };
 }
 
 export const CustomToolbar = ({ 
@@ -14,9 +13,8 @@ export const CustomToolbar = ({
   onView, 
   view, 
   date, 
-  showWeekends, 
-  setShowWeekends, 
-  onManageProjects 
+  onManageSettings,
+  quotaUsage
 }: CustomToolbarProps) => {
   
   const goToBack = () => {
@@ -51,30 +49,13 @@ export const CustomToolbar = ({
         <button className="btn" onClick={goToNext}>
           <ChevronRight size={18} />
         </button>
-        <button className="btn" onClick={onManageProjects}>
-          Projects
-        </button>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
         <div>{labelNode()}</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: 500 }}>
-          <span>Weekends</span>
-          <label className="switch">
-            <input
-              type="checkbox"
-              checked={showWeekends}
-              onChange={(e) => {
-                const checked = e.target.checked;
-                setShowWeekends(checked);
-              }}
-            />
-            <span className="slider round"></span>
-          </label>
-        </div>
       </div>
 
-      <div className="toolbar-buttons">
+      <div className="toolbar-buttons" style={{ alignItems: 'center' }}>
         <button
           className={`btn ${view === Views.MONTH ? 'primary' : ''}`}
           onClick={() => onView(Views.MONTH)}
@@ -83,7 +64,7 @@ export const CustomToolbar = ({
         </button>
         <button
           className={`btn ${(view === Views.WEEK || view === Views.WORK_WEEK) ? 'primary' : ''}`}
-          onClick={() => onView(showWeekends ? Views.WEEK : Views.WORK_WEEK)}
+          onClick={() => onView(Views.WEEK)}
         >
           Week
         </button>
@@ -92,6 +73,20 @@ export const CustomToolbar = ({
           onClick={() => onView(Views.DAY)}
         >
           Day
+        </button>
+        
+        <div style={{ width: '1px', height: '24px', backgroundColor: 'var(--border-color)', margin: '0 8px' }} />
+        
+        <button 
+           className="btn" 
+           onClick={onManageSettings} 
+           style={{ display: 'flex', gap: '6px', alignItems: 'center', padding: '6px 10px' }}
+           title={quotaUsage.percentage > 80 ? "Storage limit approaching. Older data will be kept locally." : "Settings"}
+        >
+          {quotaUsage.percentage > 80 && (
+            <AlertTriangle size={16} color="var(--delete-color)" />
+          )}
+          <Settings size={18} />
         </button>
       </div>
     </div>

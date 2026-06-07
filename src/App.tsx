@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { Calendar, dateFnsLocalizer, Views, View, EventProps, HeaderProps, DateHeaderProps, SlotInfo } from 'react-big-calendar';
 import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop';
 import { format, parse, startOfWeek, getDay } from 'date-fns';
@@ -8,8 +8,9 @@ import { useCalendarEvents } from './hooks/useCalendarEvents';
 import { useProjects } from './hooks/useProjects';
 import { TimeEntry, ModalState, formatDuration, formatMs } from './types';
 import { EventModal } from './components/EventModal';
-import { ProjectsModal } from './components/ProjectsModal';
+import { SettingsModal } from './components/SettingsModal';
 import { CustomToolbar } from './components/CustomToolbar';
+import { storage } from './storage';
 
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
@@ -71,8 +72,13 @@ function App() {
   const [date, setDate] = useState(new Date());
   
   const [modalState, setModalState] = useState<ModalState>({ isOpen: false });
-  const [isProjectsModalOpen, setIsProjectsModalOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [viewInitialized, setViewInitialized] = useState(false);
+  const [quotaUsage, setQuotaUsage] = useState({ percentage: 0 });
+
+  useEffect(() => {
+    storage.getQuotaUsage().then(usage => setQuotaUsage({ percentage: usage.percentage }));
+  }, [events, projects]);
 
   if (isInitialized && !viewInitialized) {
     setView(showWeekends ? Views.WEEK : Views.WORK_WEEK);
@@ -298,13 +304,19 @@ function App() {
   }, [eventsByDate, projectMap]);
 
   const components = useMemo(() => ({
-    toolbar: (props: any) => <CustomToolbar {...props} showWeekends={showWeekends} setShowWeekends={handleShowWeekendsChange} onManageProjects={() => setIsProjectsModalOpen(true)} />,
+    toolbar: (props: any) => (
+      <CustomToolbar 
+        {...props} 
+        onManageSettings={() => setIsSettingsModalOpen(true)} 
+        quotaUsage={quotaUsage}
+      />
+    ),
     event: CustomEvent,
     header: CustomHeader,
     month: {
       dateHeader: CustomDateHeader
     }
-  }), [showWeekends, handleShowWeekendsChange, CustomEvent, CustomHeader, CustomDateHeader]);
+  }), [CustomEvent, CustomHeader, CustomDateHeader, quotaUsage]);
 
   if (!isInitialized) {
     return (
@@ -359,14 +371,17 @@ function App() {
         onDelete={handleModalDelete}
         onAddProject={addProject}
       />
-      <ProjectsModal
-        isOpen={isProjectsModalOpen}
+      <SettingsModal
+        isOpen={isSettingsModalOpen}
         projects={projects}
         events={events}
-        onClose={() => setIsProjectsModalOpen(false)}
+        showWeekends={showWeekends}
+        quotaUsage={quotaUsage}
+        onClose={() => setIsSettingsModalOpen(false)}
         onSaveProject={updateProject}
         onDeleteProject={deleteProject}
         onAddProject={addProject}
+        setShowWeekends={handleShowWeekendsChange}
       />
     </div>
   );

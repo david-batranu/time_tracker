@@ -39,30 +39,51 @@ describe('Storage Management', () => {
     expect(loaded[0]?.start).toBeInstanceOf(Date);
   });
 
-  it('should compress and chunk time entries in sync storage', async () => {
-    // Generate many entries with long descriptions to force chunking 
-    const largeEntries: TimeEntry[] = Array.from({ length: 150 }, (_, i) => ({
-      id: `id-${i}`,
-      title: `Task ${i}`,
-      start: new Date(),
-      end: new Date(),
-      description: 'A'.repeat(200),
-    }));
+  it('should offload oldest year when payload approaches quota limit', async () => {
+    // Generate entries spanning 2024 and 2025 with uncompressible data to exceed 40000 chars compressed
+    const largeEntries: TimeEntry[] = Array.from({ length: 150 }, (_, i) => {
+      const is2024 = i < 50;
+      return {
+        id: `id-${i}`,
+        title: `Task ${i}`,
+        start: new Date(is2024 ? '2024-06-05T10:00:00Z' : '2025-06-05T10:00:00Z'),
+        end: new Date(is2024 ? '2024-06-05T12:00:00Z' : '2025-06-05T12:00:00Z'),
+        description: Array.from({ length: 1000 }, () => Math.random().toString(36)[2]).join(''),
+      };
+    });
 
     const p = storage.set(largeEntries);
     await vi.runAllTimersAsync();
     await p;
 
-    // Verify chunking metadata is set
+    // Verify metadata has minSyncDate and chunks exist
     return new Promise<void>((resolve) => {
       chrome.storage.sync.get(['events_meta'], async (result) => {
         expect(result.events_meta).toBeDefined();
         expect(result.events_meta.chunkCount).toBeGreaterThan(0);
+        expect(result.events_meta.minSyncDate).toBe('2025-01-01T00:00:00.000Z');
         
-        // Load events through storage.get and check if all are preserved
+        // Let's modify local cache to simulate a sync pull where local has 2024 and sync has 2025
+        // Actually, storage.get() right now will resolve conflict because localUpdated is the same as syncUpdated
+        // Let's force syncUpdated to be higher
+        await new Promise<void>((r) => {
+           chrome.storage.sync.set({
+              events_meta: { ...result.events_meta, lastUpdated: Date.now() + 1000 }
+           }, r);
+        });
+        
+        // storage.get should merge the local 2024 entries with sync 2025 entries
         const loaded = await storage.get();
-        expect(loaded.length).toBe(150);
-        expect(loaded[149]?.title).toBe('Task 149');
+        expect(loaded.length).toBe(150); // 50 from local (2024), 100 from sync (2025)
+        
+        // Verify a 2024 entry exists
+        const entry2024 = loaded.find(e => e.start.getFullYear() === 2024);
+        expect(entry2024).toBeDefined();
+        
+        // Verify a 2025 entry exists
+        const entry2025 = loaded.find(e => e.start.getFullYear() === 2025);
+        expect(entry2025).toBeDefined();
+        
         resolve();
       });
     });
